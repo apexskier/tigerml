@@ -7,6 +7,7 @@ structure A = Absyn
 
 datatype rval = RFieldVar of symbol * A.pos
               | RSubscriptVar of A.exp * A.pos
+              | RNone of unit
 
 %%
 
@@ -38,7 +39,7 @@ datatype rval = RFieldVar of symbol * A.pos
  | decs         of A.dec list
  | exp          of A.exp
  | exps         of (A.exp * pos) list
- | funcall
+ | funcall      of {func: symbol, args: A.exp list, pos: A.pos}
  | fundec       of A.fundec
  | fundecs      of A.fundec list
  | lvalue       of A.var
@@ -146,7 +147,7 @@ exp : LPAREN exps RPAREN                (A.SeqExp exps)
     | lvalue                            (A.VarExp lvalue)
     | lvalue ASSIGN exp                 (A.AssignExp{var=lvalue, exp=exp, pos=ASSIGNleft})
     | lvalue funcall                    ()
-    | ID LBRACK exp RBRACK OF exp       (A.ArrayExp{typ=symbol ID, size=exp1, init=exp2, pos=IDright})
+    | ID LBRACK exp RBRACK OF exp       (A.ArrayExp{typ=symbol ID, size=exp1, init=exp2, pos=IDright}) (* TODO: the ID in this should be tyid *)
     | ctlexp                            (ctlexp)
     | opexp                             (opexp)
     | tyid crrecord                     (A.RecordExp{fields=crrecord, typ=tyid, pos=tyidright})
@@ -168,11 +169,9 @@ param : param COMMA param               (param @ param)
       | exp                             ([exp])
 
 (* left hand side values *)
-lvalue : ID lsub                        ()
-
-lsub : DOT ID                           ()
-     | LBRACK exp RBRACK                ()
-     |                                  ()
+lvalue : ID ()
+       | lvalue DOT ID ()
+       | lvalue LBRACK exp RBRACK ()
 
 (* operation expressions, ordered by precedence *)
 opexp : MINUS exp          %prec UMINUS (A.OpExp{left=A.IntExp 0, oper=A.MinusOp, right=exp, pos=MINUSleft})
