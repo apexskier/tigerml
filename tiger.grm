@@ -84,7 +84,7 @@
 program	: exp				()
 
 (* declarations *)
-decs : decs dec                         ()
+decs : dec decs                         ()
      |                                  ()
 dec : tydec                             ()
     | vardec                            ()
@@ -120,7 +120,7 @@ method : METHOD ID LPAREN tyfields RPAREN EQ exp ()
        | METHOD ID LPAREN tyfields RPAREN COLON tyid EQ exp ()
 
 (* type fields: for records and functions *)
-tyfields : tyfields COMMA tyfield       ()
+tyfields : tyfield COMMA tyfields       ()
          | tyfield                      ()
          |                              ()
 tyfield : ID COLON tyid                 ()
@@ -144,7 +144,7 @@ exp : LPAREN exps RPAREN                ()
 
 (* expression sequence *)
 exps : exp                              ()
-     | exps SEMICOLON exp               ()
+     | exp SEMICOLON exps               ()
 
 (* parameters *)
 params : param                          ()
