@@ -1,0 +1,194 @@
+(* Grammar for the Tiger programming language
+   Summer 2014
+   Cameron Little *)
+
+%%
+
+
+%term
+   EOF
+ | ID of string
+ | INT of int | STRING of string
+ | COMMA | COLON | SEMICOLON | LPAREN | RPAREN | LBRACK | RBRACK
+ | LBRACE | RBRACE | DOT
+ | PLUS | MINUS | TIMES | DIVIDE | EQ | NEQ | LT | LE | GT | GE
+ | AND | OR | ASSIGN
+ | ARRAY | IF | THEN | ELSE | WHILE | FOR | TO | DO | LET | IN | END | OF
+ | BREAK | NIL
+ | FUNCTION | VAR | TYPE
+ | UMINUS
+ | CLASS | EXTENDS | METHOD | NEW
+
+%nonterm
+   program
+ | classdec
+ | classfield
+ | classfields
+ | crfield
+ | crrecord
+ | ctlexp
+ | dec
+ | decs
+ | exp
+ | exps
+ | fundec
+ | fundecs
+ | lvalue
+ | rvalue
+ | method
+ | opexp
+ | param
+ | params
+ | ty
+ | tyid
+ | tyfield
+ | tyfields
+ | tyrecord
+ | tydec
+ | vardec
+
+%pos int
+%verbose
+%start program
+%eop EOF
+%noshift EOF
+
+%name Tiger
+
+%keyword
+  WHILE FOR TO BREAK LET IN END FUNCTION VAR TYPE ARRAY
+  IF THEN ELSE DO OF NIL CLASS EXTENDS METHOD NEW
+
+%prefer THEN ELSE LPAREN
+
+%value ID ("bogus")
+%value INT (1)
+%value STRING ("")
+
+(* precedence *)
+%nonassoc   DO THEN OF          (* low *)
+%nonassoc   ELSE                 (* | *)
+%left       COMMA                (* | *)
+%nonassoc   ASSIGN               (* | *)
+%left       AND OR               (* | *)
+%nonassoc   EQ NEQ GT GE LT LE   (* | *)
+%left       PLUS MINUS           (* | *)
+%left       TIMES DIVIDE         (* | *)
+%left       UMINUS              (* high *)
+
+
+%%
+
+
+(* start *)
+program	: exp				()
+
+(* declarations *)
+decs : decs dec                         ()
+     |                                  ()
+dec : tydec                             ()
+    | vardec                            ()
+    | fundecs                           ()
+    | classdec                          ()
+
+(* type declarations *)
+tydec : TYPE tyid EQ ty                 ()
+ty : tyid                               ()
+   | tyrecord                           ()
+   | ARRAY OF tyid                      ()
+tyid : ID                               ()
+tyrecord : LBRACE tyfields RBRACE       ()
+
+(* variable declarations *)
+vardec : VAR ID ASSIGN exp              ()
+       | VAR ID COLON tyid ASSIGN exp   ()
+
+(* function declarations *)
+fundecs : fundec fundecs                ()
+        | fundec                        ()
+fundec : FUNCTION ID LPAREN tyfields RPAREN EQ exp ()
+       | FUNCTION ID LPAREN tyfields RPAREN COLON tyid EQ exp ()
+
+(* class declarations *)
+classdec : CLASS ID EXTENDS ID LBRACE classfields RBRACE ()
+classfields : classfields classfield    ()
+            |                           ()
+classfield : vardec                     ()
+           | method                     ()
+(* method declaration *)
+method : METHOD ID LPAREN tyfields RPAREN EQ exp ()
+       | METHOD ID LPAREN tyfields RPAREN COLON tyid EQ exp ()
+
+(* type fields: for records and functions *)
+tyfields : tyfields COMMA tyfield       ()
+         | tyfield                      ()
+         |                              ()
+tyfield : ID COLON tyid                 ()
+
+(* general expressions *)
+exp : LPAREN exps RPAREN                ()
+    | INT                               ()
+    | STRING                            ()
+    | NIL                               ()
+    | lvalue                            ()
+    | lvalue ASSIGN exp                 ()
+    | ID LBRACK exp RBRACK OF exp       ()
+    | ctlexp                            ()
+    | opexp                             ()
+    | tyid crrecord                     ()
+    (* function calls *)
+    | LPAREN RPAREN                     ()
+    | ID LPAREN params RPAREN           ()
+    (* object oriented stuff *)
+    | NEW ID                            ()
+
+(* expression sequence *)
+exps : exp                              ()
+     | exps SEMICOLON exp               ()
+
+(* parameters *)
+params : param                          ()
+       |                                ()
+param : param COMMA param               ()
+      | exp                             ()
+
+(* left hand side values *)
+lvalue : ID rvalue                      ()
+rvalue : DOT ID                         ()
+       | LBRACK exp RBRACK              ()
+       | DOT ID LPAREN params RPAREN    ()
+       |                                ()
+
+(* operation expressions, ordered by precedence *)
+opexp : MINUS exp          %prec UMINUS ()
+
+      | exp TIMES exp                   ()
+      | exp DIVIDE exp                  ()
+
+      | exp PLUS exp                    ()
+      | exp MINUS exp                   ()
+
+      | exp EQ exp                      ()
+      | exp NEQ exp                     ()
+      | exp GT exp                      ()
+      | exp GE exp                      ()
+      | exp LT exp                      ()
+      | exp LE exp                      ()
+
+      | exp AND exp                     ()
+      | exp OR exp                      ()
+
+(* flow control expressions *)
+ctlexp : IF exp THEN exp ELSE exp       ()
+       | IF exp THEN exp                ()
+       | WHILE exp DO exp               ()
+       | FOR ID ASSIGN exp TO exp DO exp ()
+       | BREAK                          ()
+       | LET decs IN exps END           ()
+
+(* record creation *)
+crrecord : LBRACE RBRACE                ()
+         | LBRACE crfield RBRACE        ()
+crfield : crfield COMMA crfield         ()
+        | ID EQ exp                     ()
+
