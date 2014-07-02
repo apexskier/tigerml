@@ -21,8 +21,10 @@
 
 %nonterm
    program
+ | classdec
+ | classfield
+ | classfields
  | crfield
- | crfields
  | crrecord
  | ctlexp
  | dec
@@ -30,8 +32,10 @@
  | exp
  | exps
  | fundec
- | fundeclist
+ | fundecs
  | lvalue
+ | rvalue
+ | method
  | opexp
  | param
  | params
@@ -70,8 +74,7 @@
 %nonassoc   EQ NEQ GT GE LT LE   (* | *)
 %left       PLUS MINUS           (* | *)
 %left       TIMES DIVIDE         (* | *)
-%left       UMINUS               (* v *)
-(* %right      EXP                 (* high *) *)
+%left       UMINUS              (* high *)
 
 
 %%
@@ -85,13 +88,14 @@ decs : decs dec                         ()
      |                                  ()
 dec : tydec                             ()
     | vardec                            ()
-    | fundeclist                        ()
+    | fundecs                           ()
+    | classdec                          ()
 
 (* type declarations *)
-tydec : TYPE tyid EQ ty               ()
+tydec : TYPE tyid EQ ty                 ()
 ty : tyid                               ()
    | tyrecord                           ()
-   | ARRAY OF tyid                    ()
+   | ARRAY OF tyid                      ()
 tyid : ID                               ()
 tyrecord : LBRACE tyfields RBRACE       ()
 
@@ -100,16 +104,26 @@ vardec : VAR ID ASSIGN exp              ()
        | VAR ID COLON tyid ASSIGN exp   ()
 
 (* function declarations *)
-fundeclist : fundec fundeclist          ()
-           | fundec                     ([fundec])
-fundec : FUNCTION ID LPAREN tyfields RPAREN EQ exp  ()
+fundecs : fundec fundecs                ()
+        | fundec                        ()
+fundec : FUNCTION ID LPAREN tyfields RPAREN EQ exp ()
        | FUNCTION ID LPAREN tyfields RPAREN COLON tyid EQ exp ()
 
+(* class declarations *)
+classdec : CLASS ID EXTENDS ID LBRACE classfields RBRACE ()
+classfields : classfields classfield    ()
+            |                           ()
+classfield : vardec                     ()
+           | method                     ()
+(* method declaration *)
+method : METHOD ID LPAREN tyfields RPAREN EQ exp ()
+       | METHOD ID LPAREN tyfields RPAREN COLON tyid EQ exp ()
+
 (* type fields: for records and functions *)
-tyfields : tyfield COMMA tyfields       ()
+tyfields : tyfields COMMA tyfield       ()
          | tyfield                      ()
          |                              ()
-tyfield : ID COLON tyid               ()
+tyfield : ID COLON tyid                 ()
 
 (* general expressions *)
 exp : LPAREN exps RPAREN                ()
@@ -118,19 +132,19 @@ exp : LPAREN exps RPAREN                ()
     | NIL                               ()
     | lvalue                            ()
     | lvalue ASSIGN exp                 ()
-    | ID                                ()
-    | ID ASSIGN exp                     ()
     | ID LBRACK exp RBRACK OF exp       ()
     | ctlexp                            ()
     | opexp                             ()
-    | tyid crrecord                   ()
+    | tyid crrecord                     ()
     (* function calls *)
     | LPAREN RPAREN                     ()
     | ID LPAREN params RPAREN           ()
+    (* object oriented stuff *)
+    | NEW ID                            ()
 
 (* expression sequence *)
 exps : exp                              ()
-     | exp SEMICOLON exps               ()
+     | exps SEMICOLON exp               ()
 
 (* parameters *)
 params : param                          ()
@@ -139,10 +153,11 @@ param : param COMMA param               ()
       | exp                             ()
 
 (* left hand side values *)
-lvalue : lvalue DOT ID                  ()
-       | ID DOT ID                      ()
-       | lvalue LBRACK exp RBRACK       ()
-       | ID LBRACK exp RBRACK           ()
+lvalue : ID rvalue                      ()
+rvalue : DOT ID                         ()
+       | LBRACK exp RBRACK              ()
+       | DOT ID LPAREN params RPAREN    ()
+       |                                ()
 
 (* operation expressions, ordered by precedence *)
 opexp : MINUS exp          %prec UMINUS ()
@@ -167,13 +182,13 @@ opexp : MINUS exp          %prec UMINUS ()
 ctlexp : IF exp THEN exp ELSE exp       ()
        | IF exp THEN exp                ()
        | WHILE exp DO exp               ()
-       | FOR ID ASSIGN exp TO exp DO exp()
+       | FOR ID ASSIGN exp TO exp DO exp ()
        | BREAK                          ()
        | LET decs IN exps END           ()
 
 (* record creation *)
 crrecord : LBRACE RBRACE                ()
-         | LBRACE crfields RBRACE       ()
-crfields : crfield COMMA crfields       ()
-         | crfield                      ()
-crfield : ID EQ exp                     ()
+         | LBRACE crfield RBRACE        ()
+crfield : crfield COMMA crfield         ()
+        | ID EQ exp                     ()
+
