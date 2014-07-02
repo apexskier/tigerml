@@ -5,9 +5,6 @@
 open Symbol
 structure A = Absyn
 
-datatype rval = RFieldVar of symbol * A.pos
-              | RSubscriptVar of A.exp * A.pos
-              | RNone of unit
 
 %%
 
@@ -43,7 +40,6 @@ datatype rval = RFieldVar of symbol * A.pos
  | fundec       of A.fundec
  | fundecs      of A.fundec list
  | lvalue       of A.var
- | lsub         of rval
  | method
  | opexp        of A.exp
  | param        of A.exp list
@@ -169,9 +165,9 @@ param : param COMMA param               (param @ param)
       | exp                             ([exp])
 
 (* left hand side values *)
-lvalue : ID ()
-       | lvalue DOT ID ()
-       | lvalue LBRACK exp RBRACK ()
+lvalue : ID                             (A.SimpleVar(symbol ID, IDleft))
+       | lvalue DOT ID                  (A.FieldVar(lvalue, symbol ID, DOTleft))
+       | lvalue LBRACK exp RBRACK       (A.SubscriptVar(lvalue, exp, LBRACKleft))
 
 (* operation expressions, ordered by precedence *)
 opexp : MINUS exp          %prec UMINUS (A.OpExp{left=A.IntExp 0, oper=A.MinusOp, right=exp, pos=MINUSleft})
