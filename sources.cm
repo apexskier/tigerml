@@ -4,5 +4,10 @@ driver.sml
 errormsg.sml
 tokens.sig
 tokens.sml
-tiger.lex
-smlnj-lib.cm
+tiger.lex : shell (target: tiger.lex.sml ml-lex %s)
+(* smlnj-lib.cm *)
+(* ml-yacc-lib.cm *)
+$/smlnj-lib.cm
+(* $/ml-yacc-lib.cm *)
+$/basis.cm
+
