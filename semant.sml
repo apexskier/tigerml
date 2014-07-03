@@ -282,7 +282,13 @@ struct
                      {exp=(), ty=checkTy(T.UNIT, thenTy, pos)}
             end
         | trexp(A.WhileExp{test, body, pos}) =
-          errExpty (* TODO *)
+            let
+              val {exp=testExp, ty=tTy} = trexp test
+              val {exp=bodyExp, ty=bTy} = trexp body
+            in
+              (checkTy(T.INT, tTy, pos);
+              {exp=(), ty=checkTy(T.UNIT, bTy, pos)})
+            end
         | trexp(A.ForExp{var, escape, lo, hi, body, pos}) =
           errExpty (* TODO *)
         | trexp(A.BreakExp pos) =
