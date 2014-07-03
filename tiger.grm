@@ -75,6 +75,7 @@ structure A = Absyn
 (* precedence *)
 %nonassoc   LOWPREC             (* low *)
 %nonassoc   FUNCTION METHOD VAR TYPE THEN DO OF ASSIGN
+%nonassoc   LBRACK
 %right      ELSE                 (* | *)
 %left       COMMA                (* | *)
 %left       AND                  (* | *)
@@ -138,8 +139,9 @@ tyfields : tyfield COMMA tyfields       ([tyfield] @ tyfields)
 tyfield : ID COLON tyid                 ({name=symbol ID, escape=ref true, typ=tyid, pos=COLONleft})
 
 (* left hand side values *)
-lvalue : ID                             (A.SimpleVar(symbol ID, IDleft))
+lvalue : ID               %prec LOWPREC (A.SimpleVar(symbol ID, IDleft))
        | lvalue DOT ID                  (A.FieldVar(lvalue, symbol ID, DOTleft))
+       | ID LBRACK exp RBRACK           (A.SubscriptVar(A.SimpleVar(symbol ID, IDleft), exp, LBRACKleft))
        | lvalue LBRACK exp RBRACK       (A.SubscriptVar(lvalue, exp, LBRACKleft))
 
 (* general expressions *)
@@ -151,6 +153,7 @@ exp : LPAREN exps RPAREN                (A.SeqExp exps)
     | lvalue                            (A.VarExp lvalue)
     | lvalue ASSIGN exp                 (A.AssignExp{var=lvalue, exp=exp, pos=ASSIGNleft})
     | lvalue DOT funcall                (A.MethodExp{var=lvalue, name=(#func funcall), args=(#args funcall), pos=(#pos funcall)})
+    | ID LBRACK exp RBRACK OF exp       (A.NilExp) (* TODO: the ID in this should be tyid *)
     | ctlexp                            (ctlexp)
     | opexp                             (opexp)
     | tyid crrecord                     (A.RecordExp{fields=crrecord, typ=tyid, pos=tyidright})
