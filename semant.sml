@@ -104,10 +104,10 @@ struct
           of SOME(E.VarEntry{ty}) => {exp=(), ty=actTy ty}
            | SOME(E.FunEntry{formals, result}) =>
              (error pos ("function name used as var: '" ^ S.name id ^ "'");
-             {exp=(), ty=T.UNIT})
+             errExpty)
            | NONE =>
              (error pos ("unknown variable '" ^ S.name id ^ "'");
-             {exp=(), ty=T.UNIT}))
+             errExpty))
         | trvar(A.FieldVar(var, id, pos)) =
         (case #ty(trvar var)
           of T.RECORD(fields, _) =>
@@ -119,16 +119,16 @@ struct
                   of SOME(_, ty) => {exp=(), ty=ty}
                    | NONE => (
                       error pos ("record field '" ^ S.name id ^ "' not found");
-                      {exp=(), ty=T.UNIT})
+                      errExpty)
               end
            | _ => (
               error pos ("accessing field '" ^ S.name id ^ "' on non-record");
-              {exp=(), ty=T.UNIT}))
+              errExpty))
         | trvar(A.SubscriptVar(var, exp, pos)) =
         (case #ty(trvar var)
           of T.ARRAY(ty, _) => {exp=(), ty=ty}
            | _ => (error pos "subscripting non-array";
-              {exp=(), ty=T.UNIT}))
+              errExpty))
     in
       trvar var
     end
@@ -233,10 +233,10 @@ struct
                 errExpty)
             end
         | trexp(A.RecordExp{fields, typ, pos}) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+          errExpty (* TODO *)
         | trexp(A.SeqExp exps) =
             (case exps
-              of nil => {exp=(), ty=T.UNIT}
+              of nil => errExpty
                | _ =>
                 let
                   val (lastexp, _) = List.last exps
@@ -252,7 +252,15 @@ struct
                   {exp=(), ty=lastty}
                 end)
         | trexp(A.AssignExp{var, exp, pos}) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+            let
+              val {exp=_, ty=varTy} = transVar(venv, tenv, var)
+              val {exp=_, ty=expTy} = trexp exp
+            in
+              (if tyEq(varTy, expTy) then ()
+              else
+                error pos "assignment type mismatch";
+              {exp=(), ty=varTy})
+            end
         | trexp(A.IfExp{test, then'=th, else'=el, pos}) =
             let
               val {exp=_, ty=testTy} = trexp test
@@ -274,11 +282,11 @@ struct
                      {exp=(), ty=checkTy(T.UNIT, thenTy, pos)}
             end
         | trexp(A.WhileExp{test, body, pos}) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+          errExpty (* TODO *)
         | trexp(A.ForExp{var, escape, lo, hi, body, pos}) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+          errExpty (* TODO *)
         | trexp(A.BreakExp pos) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+          errExpty (* TODO *)
         | trexp(A.LetExp{decs, body, pos}) =
             let
               val {venv=venv', tenv=tenv'} = transDecs(venv, tenv, decs)
@@ -287,11 +295,11 @@ struct
               {exp=(), ty=ty}
             end
         | trexp(A.ArrayExp{typ, size, init, pos}) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+          errExpty (* TODO *)
         | trexp(A.MethodExp{var, name, args, pos}) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+          errExpty (* TODO *)
         | trexp(A.NewExp(name, pos)) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+          errExpty (* TODO *)
     in
       trexp exp
     end
@@ -301,7 +309,7 @@ struct
       fun trdecs(dec, {venv, tenv}) =
         transDec(venv, tenv, dec)
     in
-      foldr trdecs {venv=venv, tenv=tenv} decs
+      foldl trdecs {venv=venv, tenv=tenv} decs
     end
 
   and transDec(venv, tenv, dec) =
@@ -309,9 +317,29 @@ struct
       fun trdec(A.FunctionDec fundecs) =
           {venv=venv, tenv=tenv} (* TODO *)
         | trdec(A.VarDec{name, escape, typ, init, pos}) =
-          {venv=venv, tenv=tenv} (* TODO *)
+            let
+              val {exp=initExp, ty=initTy} = transExp(venv, tenv, init)
+            in
+              case typ
+                of SOME(tyName, tyPos) =>
+                  (case S.look(tenv, tyName)
+                    of SOME(ty) =>
+                      (if tyEq(initTy, ty) then ()
+                      else error pos ("variable type '" ^ S.name tyName ^ "' doesn't match initialization");
+                      {venv=S.enter(venv, name, E.VarEntry{ty=ty}), tenv=tenv})
+                     | NONE =>
+                      (error pos ("unknown type '" ^ S.name tyName ^ "' in variable declaration");
+                      {venv=venv, tenv=tenv}))
+                 | NONE =>
+                  {venv=S.enter(venv, name, E.VarEntry{ty=initTy}), tenv=tenv}
+            end
         | trdec(A.TypeDec tydecs) =
-          {venv=venv, tenv=tenv} (* TODO *)
+            let
+              fun trtydec({name, ty, pos}, {venv, tenv}) =
+                {venv=venv, tenv=S.enter(tenv, name, transTy(tenv, ty))}
+            in
+              foldl trtydec {venv=venv, tenv=tenv} tydecs
+            end
         | trdec(A.ClassDec{name, parent, fields, pos}) =
           {venv=venv, tenv=tenv} (* TODO *)
     in
@@ -321,7 +349,11 @@ struct
   and transTy(tenv, ty) =
     let
       fun trty(A.NameTy(name, pos)) =
-          T.UNIT (* TODO *)
+        (case S.look(tenv, name)
+          of SOME(ty) => ty
+           | NONE =>
+            (error pos ("unknown type '" ^ S.name name ^ "'");
+            T.UNIT))
         | trty(A.RecordTy fields) =
           T.UNIT (* TODO *)
         | trty(A.ArrayTy(name, pos)) =
