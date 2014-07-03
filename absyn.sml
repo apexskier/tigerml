@@ -24,6 +24,7 @@ struct
                | LetExp of {decs: dec list, body: exp, pos: pos}
                | ArrayExp of {typ: symbol, size: exp, init: exp, pos: pos}
                | MethodExp of {var: var, name: symbol, args: exp list, pos: pos}
+               | NewExp of symbol * pos
 
   and dec = FunctionDec of fundec list
                | VarDec of {name: symbol,

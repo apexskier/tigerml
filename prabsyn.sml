@@ -85,6 +85,8 @@ struct
           (indent d; sayln "MethodExp("; var(v,d+1);
            say ","; say(Symbol.name name);
            say ",["; dolist d exp args; say "])")
+      | exp(A.NewExp(name, pos), d) =
+          (indent d; say "NewExp("; say(Symbol.name name); say ")")
 
 
     and dec(A.FunctionDec l, d) =
