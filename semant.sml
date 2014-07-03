@@ -30,32 +30,50 @@ struct
 
   (* Utility functions *)
   fun actTy(T.NAME(name, ty)) =
-     (case !ty
-        of NONE => (error 0 ("unknown name " ^ S.name name); T.UNIT)
-         | SOME t => actTy t)
+    (case !ty
+      of NONE => (error 0 ("unknown name " ^ S.name name); T.UNIT)
+       | SOME t => actTy t)
     | actTy t = t
 
   fun getSym(s: S.symbol, _) = s
 
   fun tyEq(a, b) =
-        let val A = actTy a
-            val B = actTy b
-        in
-          if A = B
-          then true
-          else
-            case A
-              of T.NIL =>
-                ( case B
-                    of T.RECORD(_, _) => true
-                     | _ => false )
-               | T.RECORD(c, d) =>
-                ( case B
-                    of T.RECORD(c, d) => true
-                     | T.NIL => true
-                     | _ => false )
-               | _ => false
-        end
+    let val A = actTy a
+        val B = actTy b
+    in
+      if A = B then true
+      else
+        case A
+          of T.NIL =>
+            ( case B
+                of T.RECORD(_, _) => true
+                 | _ => false )
+           | T.RECORD(c, d) =>
+            ( case B
+                of T.RECORD(c, d) => true
+                 | T.NIL => true
+                 | _ => false )
+           | _ => false
+    end
+
+  fun checkTy(req, ty, pos) =
+    let
+      val strTy =
+        case req
+          of T.RECORD _ => "record"
+           | T.NIL => "nil"
+           | T.INT => "int"
+           | T.STRING => "string"
+           | T.ARRAY _ => "array"
+           | T.NAME _ => "name"
+           | T.UNIT => "unit"
+           | T.CLASS _ => "class"
+    in
+      if ty <> req then
+        (error pos ("wrong type: expected " ^ strTy);
+        req)
+      else ty
+    end
 
   (* Main visible functions *)
   fun transVar(venv, tenv, var) =
@@ -137,11 +155,44 @@ struct
         | trexp(A.RecordExp{fields, typ, pos}) =
           {exp=(), ty=T.UNIT} (* TODO *)
         | trexp(A.SeqExp exps) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+            (case exps
+              of nil => {exp=(), ty=T.UNIT}
+               | _ =>
+                let
+                  val (lastexp, _) = List.last exps
+                  val exps = List.take(exps, (length exps - 1)) (* drop last exp *)
+                  val {exp=lastexp', ty=lastty} = trexp lastexp
+                  fun getexps((exp, _), exps') =
+                    let val {exp=newExp, ty} = trexp exp
+                    in
+                      newExp :: exps'
+                    end
+                  val _ = foldr getexps [] exps @ [lastexp']
+                in
+                  {exp=(), ty=lastty}
+                end)
         | trexp(A.AssignExp{var, exp, pos}) =
           {exp=(), ty=T.UNIT} (* TODO *)
-        | trexp(A.IfExp{test, then', else', pos}) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+        | trexp(A.IfExp{test, then'=th, else'=el, pos}) =
+            let
+              val {exp=_, ty=testTy} = trexp test
+              val _ = checkTy(T.INT, testTy, pos)
+              val {exp=_, ty=thenTy} = trexp th
+            in
+              case el
+                of SOME(elseExp) =>
+                  let
+                    val {exp=_, ty=elseTy} = trexp elseExp
+                  in
+                    if tyEq(thenTy, elseTy) then
+                      {exp=(), ty=thenTy}
+                    else
+                      (error pos "else type doesn't match then in if statement";
+                      errExpty)
+                  end
+                 | NONE =>
+                     {exp=(), ty=checkTy(T.UNIT, thenTy, pos)}
+            end
         | trexp(A.WhileExp{test, body, pos}) =
           {exp=(), ty=T.UNIT} (* TODO *)
         | trexp(A.ForExp{var, escape, lo, hi, body, pos}) =
