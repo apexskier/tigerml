@@ -49,7 +49,7 @@ struct
                            typ: (symbol * pos) option,
                            init: exp,
                            pos: pos}
-                 | MethodDec of fundec
+                 | MethodDec of fundec list
 
   withtype field = {name: symbol, escape: bool ref,
                     typ: symbol, pos: pos}

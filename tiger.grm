@@ -40,7 +40,8 @@ structure A = Absyn
  | fundec       of A.fundec
  | fundecs      of A.fundec list
  | lvalue       of A.var
- | method       of A.classfield
+ | methoddec    of A.fundec
+ | methoddecs   of A.fundec list
  | opexp        of A.exp
  | param        of A.exp list
  | params       of A.exp list
@@ -123,10 +124,12 @@ classdec : CLASS ID EXTENDS ID LBRACE classfields RBRACE (A.ClassDec{name=symbol
 classfields : classfield classfields    ([classfield] @ classfields)
             |                           ([])
 classfield : vardec                     (A.ClassVarDec vardec)
-           | method                     (method)
+           | methoddecs                 (A.MethodDec methoddecs)
 (* method declaration *)
-method : METHOD ID LPAREN tyfields RPAREN EQ exp (A.MethodDec{name=symbol ID, params=tyfields, result=NONE, body=exp, pos=IDleft})
-       | METHOD ID LPAREN tyfields RPAREN COLON tyid EQ exp (A.MethodDec{name=symbol ID, params=tyfields, result=SOME(tyid, tyidleft), body=exp, pos=IDleft})
+methoddecs : methoddec    %prec LOWPREC ([methoddec])
+           | methoddec methoddecs       ([methoddec] @ methoddecs)
+methoddec : METHOD ID LPAREN tyfields RPAREN EQ exp ({name=symbol ID, params=tyfields, result=NONE, body=exp, pos=IDleft})
+          | METHOD ID LPAREN tyfields RPAREN COLON tyid EQ exp ({name=symbol ID, params=tyfields, result=SOME(tyid, tyidleft), body=exp, pos=IDleft})
 
 (* type fields: for records and functions *)
 tyfields : tyfield COMMA tyfields       ([tyfield] @ tyfields)
