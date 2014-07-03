@@ -8,7 +8,7 @@ sig
   val base_venv : enventry Symbol.table
 end
 
-structure Env :> ENV =
+structure Env : ENV =
 struct
 
   structure T = Types

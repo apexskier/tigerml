@@ -13,7 +13,7 @@ sig
   val transTy : tenv * Absyn.ty -> Types.ty
 end
 
-structure Semant :> SEMANT =
+structure Semant : SEMANT =
 struct
 
   structure A = Absyn
@@ -149,7 +149,12 @@ struct
         | trexp(A.BreakExp pos) =
           {exp=(), ty=T.UNIT} (* TODO *)
         | trexp(A.LetExp{decs, body, pos}) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+            let
+              val {venv=venv', tenv=tenv'} = transDecs(venv, tenv, decs)
+              val {exp=bodyexp, ty=ty} = transExp(venv', tenv', body)
+            in
+              {exp=(), ty=ty}
+            end
         | trexp(A.ArrayExp{typ, size, init, pos}) =
           {exp=(), ty=T.UNIT} (* TODO *)
         | trexp(A.MethodExp{var, name, args, pos}) =
