@@ -26,9 +26,9 @@ structure A = Absyn
 
 %nonterm
    program      of A.exp
- | classdec
- | classfield
- | classfields
+ | classdec     of A.dec
+ | classfield   of A.classfield
+ | classfields  of A.classfield list
  | crfield      of (symbol * A.exp * A.pos) list
  | crrecord     of (symbol * A.exp * A.pos) list
  | ctlexp       of A.exp
@@ -40,7 +40,7 @@ structure A = Absyn
  | fundec       of A.fundec
  | fundecs      of A.fundec list
  | lvalue       of A.var
- | method
+ | method       of A.classfield
  | opexp        of A.exp
  | param        of A.exp list
  | params       of A.exp list
@@ -51,7 +51,7 @@ structure A = Absyn
  | tyrecord     of A.field list
  | tydec        of {name: symbol, ty: A.ty, pos: A.pos}
  | tydecs       of {name: symbol, ty: A.ty, pos: A.pos} list
- | vardec       of A.dec
+ | vardec       of {name: symbol, escape: bool ref, typ: (symbol * pos) option, init: A.exp, pos: A.pos}
 
 %pos int
 %verbose
@@ -94,9 +94,9 @@ program	: exp				            (exp)
 decs : dec decs                         ([dec] @ decs)
      |                                  ([])
 dec : tydecs                            (A.TypeDec tydecs)
-    | vardec                            (vardec)
+    | vardec                            (A.VarDec vardec)
     | fundecs                           (A.FunctionDec fundecs)
-    | classdec                          ()
+    | classdec                          (classdec)
 
 (* type declarations *)
 tydecs : tydec            %prec LOWPREC ([tydec])
@@ -109,8 +109,8 @@ tyid : ID                               (symbol ID)
 tyrecord : LBRACE tyfields RBRACE       (tyfields)
 
 (* variable declarations *)
-vardec : VAR ID ASSIGN exp              (A.VarDec{name=symbol ID, escape=ref true, typ=NONE, init=exp, pos=IDleft})
-       | VAR ID COLON tyid ASSIGN exp   (A.VarDec{name=symbol ID, escape=ref true, typ=SOME(tyid, tyidleft), init=exp, pos=IDleft})
+vardec : VAR ID ASSIGN exp              ({name=symbol ID, escape=ref true, typ=NONE, init=exp, pos=IDleft})
+       | VAR ID COLON tyid ASSIGN exp   ({name=symbol ID, escape=ref true, typ=SOME(tyid, tyidleft), init=exp, pos=IDleft})
 
 (* function declarations *)
 fundecs : fundec          %prec LOWPREC ([fundec])
@@ -119,14 +119,14 @@ fundec : FUNCTION ID LPAREN tyfields RPAREN EQ exp ({name=symbol ID, params=tyfi
        | FUNCTION ID LPAREN tyfields RPAREN COLON tyid EQ exp ({name=symbol ID, params=tyfields, result=SOME(tyid, tyidleft), body=exp, pos=IDleft})
 
 (* class declarations *)
-classdec : CLASS ID EXTENDS ID LBRACE classfields RBRACE ()
-classfields : classfields classfield    ()
-            |                           ()
-classfield : vardec                     ()
-           | method                     ()
+classdec : CLASS ID EXTENDS ID LBRACE classfields RBRACE (A.ClassDec{name=symbol ID1, parent=symbol ID2, fields=classfields, pos=CLASSleft})
+classfields : classfield classfields    ([classfield] @ classfields)
+            |                           ([])
+classfield : vardec                     (A.ClassVarDec vardec)
+           | method                     (method)
 (* method declaration *)
-method : METHOD ID LPAREN tyfields RPAREN EQ exp ()
-       | METHOD ID LPAREN tyfields RPAREN COLON tyid EQ exp ()
+method : METHOD ID LPAREN tyfields RPAREN EQ exp (A.MethodDec{name=symbol ID, params=tyfields, result=NONE, body=exp, pos=IDleft})
+       | METHOD ID LPAREN tyfields RPAREN COLON tyid EQ exp (A.MethodDec{name=symbol ID, params=tyfields, result=SOME(tyid, tyidleft), body=exp, pos=IDleft})
 
 (* type fields: for records and functions *)
 tyfields : tyfield COMMA tyfields       ([tyfield] @ tyfields)
@@ -142,7 +142,7 @@ exp : LPAREN exps RPAREN                (A.SeqExp exps)
     | NIL                               (A.NilExp)
     | lvalue                            (A.VarExp lvalue)
     | lvalue ASSIGN exp                 (A.AssignExp{var=lvalue, exp=exp, pos=ASSIGNleft})
-    | lvalue funcall                    ()
+    | lvalue funcall                    (A.MethodExp{var=lvalue, name=(#func funcall), args=(#args funcall), pos=(#pos funcall)})
     | ID LBRACK exp RBRACK OF exp       (A.ArrayExp{typ=symbol ID, size=exp1, init=exp2, pos=IDright}) (* TODO: the ID in this should be tyid *)
     | ctlexp                            (ctlexp)
     | opexp                             (opexp)
