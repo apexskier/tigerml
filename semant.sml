@@ -100,35 +100,35 @@ struct
   fun transVar(venv, tenv, var) =
     let
       fun trvar(A.SimpleVar(id, pos)) =
-        (case S.look(venv, id)
-          of SOME(E.VarEntry{ty}) => {exp=(), ty=actTy ty}
-           | SOME(E.FunEntry{formals, result}) =>
-             (error pos ("function name used as var: '" ^ S.name id ^ "'");
-             errExpty)
-           | NONE =>
-             (error pos ("unknown variable '" ^ S.name id ^ "'");
-             errExpty))
+            (case S.look(venv, id)
+              of SOME(E.VarEntry{ty}) => {exp=(), ty=actTy ty}
+               | SOME(E.FunEntry{formals, result}) =>
+                 (error pos ("function name used as var: '" ^ S.name id ^ "'");
+                 errExpty)
+               | NONE =>
+                 (error pos ("unknown variable '" ^ S.name id ^ "'");
+                 errExpty))
         | trvar(A.FieldVar(var, id, pos)) =
-        (case #ty(trvar var)
-          of T.RECORD(fields, _) =>
-              (* look up field *)
-              let fun matchField(field) =
-                        id = getSym field
-              in
-                case List.find matchField fields
-                  of SOME(_, ty) => {exp=(), ty=ty}
-                   | NONE => (
-                      error pos ("record field '" ^ S.name id ^ "' not found");
-                      errExpty)
-              end
-           | _ => (
-              error pos ("accessing field '" ^ S.name id ^ "' on non-record");
-              errExpty))
+            (case #ty(trvar var)
+              of T.RECORD(fields, _) =>
+                  (* look up field *)
+                  let fun matchField(field) =
+                            id = getSym field
+                  in
+                    case List.find matchField fields
+                      of SOME(_, ty) => {exp=(), ty=ty}
+                       | NONE => (
+                          error pos ("record field '" ^ S.name id ^ "' not found");
+                          errExpty)
+                  end
+               | _ => (
+                  error pos ("accessing field '" ^ S.name id ^ "' on non-record");
+                  errExpty))
         | trvar(A.SubscriptVar(var, exp, pos)) =
-        (case #ty(trvar var)
-          of T.ARRAY(ty, _) => {exp=(), ty=ty}
-           | _ => (error pos "subscripting non-array";
-              errExpty))
+            (case #ty(trvar var)
+              of T.ARRAY(ty, _) => {exp=(), ty=ty}
+               | _ => (error pos "subscripting non-array";
+                  errExpty))
     in
       trvar var
     end
@@ -349,11 +349,11 @@ struct
   and transTy(tenv, ty) =
     let
       fun trty(A.NameTy(name, pos)) =
-        (case S.look(tenv, name)
-          of SOME(ty) => ty
-           | NONE =>
-            (error pos ("unknown type '" ^ S.name name ^ "'");
-            T.UNIT))
+            (case S.look(tenv, name)
+              of SOME(ty) => ty
+               | NONE =>
+                (error pos ("unknown type '" ^ S.name name ^ "'");
+                T.UNIT))
         | trty(A.RecordTy fields) =
           T.UNIT (* TODO *)
         | trty(A.ArrayTy(name, pos)) =
