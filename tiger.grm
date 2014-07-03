@@ -74,7 +74,7 @@ structure A = Absyn
 
 (* precedence *)
 %nonassoc   LOWPREC             (* low *)
-%nonassoc   FUNCTION VAR TYPE THEN DO OF ASSIGN
+%nonassoc   FUNCTION METHOD VAR TYPE THEN DO OF ASSIGN
 %right      ELSE                 (* | *)
 %left       COMMA                (* | *)
 %left       AND                  (* | *)
@@ -137,6 +137,11 @@ tyfields : tyfield COMMA tyfields       ([tyfield] @ tyfields)
          |                              ([])
 tyfield : ID COLON tyid                 ({name=symbol ID, escape=ref true, typ=tyid, pos=COLONleft})
 
+(* left hand side values *)
+lvalue : ID                             (A.SimpleVar(symbol ID, IDleft))
+       | lvalue DOT ID                  (A.FieldVar(lvalue, symbol ID, DOTleft))
+       | lvalue LBRACK exp RBRACK       (A.SubscriptVar(lvalue, exp, LBRACKleft))
+
 (* general expressions *)
 exp : LPAREN exps RPAREN                (A.SeqExp exps)
     | LPAREN RPAREN                     (A.SeqExp [])
@@ -145,8 +150,7 @@ exp : LPAREN exps RPAREN                (A.SeqExp exps)
     | NIL                               (A.NilExp)
     | lvalue                            (A.VarExp lvalue)
     | lvalue ASSIGN exp                 (A.AssignExp{var=lvalue, exp=exp, pos=ASSIGNleft})
-    | lvalue funcall                    (A.MethodExp{var=lvalue, name=(#func funcall), args=(#args funcall), pos=(#pos funcall)})
-    | ID LBRACK exp RBRACK OF exp       (A.ArrayExp{typ=symbol ID, size=exp1, init=exp2, pos=IDright}) (* TODO: the ID in this should be tyid *)
+    | lvalue DOT funcall                (A.MethodExp{var=lvalue, name=(#func funcall), args=(#args funcall), pos=(#pos funcall)})
     | ctlexp                            (ctlexp)
     | opexp                             (opexp)
     | tyid crrecord                     (A.RecordExp{fields=crrecord, typ=tyid, pos=tyidright})
@@ -166,11 +170,6 @@ params : param                          (param)
        |                                ([])
 param : param COMMA param               (param @ param)
       | exp                             ([exp])
-
-(* left hand side values *)
-lvalue : ID                             (A.SimpleVar(symbol ID, IDleft))
-       | lvalue DOT ID                  (A.FieldVar(lvalue, symbol ID, DOTleft))
-       | lvalue LBRACK exp RBRACK       (A.SubscriptVar(lvalue, exp, LBRACKleft))
 
 (* operation expressions, ordered by precedence *)
 opexp : MINUS exp          %prec UMINUS (A.OpExp{left=A.IntExp 0, oper=A.MinusOp, right=exp, pos=MINUSleft})

@@ -81,6 +81,10 @@ struct
       | exp(A.ArrayExp{typ,size,init,pos},d) =
               (indent d; say "ArrayExp("; say(Symbol.name typ); sayln ",";
            exp(size,d+1); sayln ","; exp(init,d+1); say ")")
+      | exp(A.MethodExp{var=v,name,args,pos},d) =
+          (indent d; sayln "MethodExp("; var(v,d+1);
+           say ","; say(Symbol.name name);
+           say ",["; dolist d exp args; say "])")
 
 
     and dec(A.FunctionDec l, d) =
@@ -110,7 +114,7 @@ struct
            end
       | dec(A.ClassDec{name,parent,fields,pos}, d) =
           (indent d; say "ClassDec(";
-          say(Symbol.name name); say ","; say(Symbol.name parent);
+          say(Symbol.name name); say ","; say(Symbol.name parent); say ",";
           say "["; dolist d classfield fields; say "]";
           say ")")
 
