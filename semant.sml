@@ -121,7 +121,7 @@ struct
         | trexp(A.IntExp i) =
             {exp=(), ty=T.INT}
         | trexp(A.StringExp s) =
-            {exp=(), ty=T.STRING} (* TODO *)
+            {exp=(), ty=T.STRING}
         | trexp(A.CallExp{func, args, pos}) =
             (case S.look(venv, func)
               of SOME(E.FunEntry{formals, result=resultTy}) =>
@@ -151,7 +151,64 @@ struct
                   (error pos ("unknown function: '" ^ S.name func ^ "'");
                   errExpty))
         | trexp(A.OpExp{left, oper, right, pos}) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+            let
+              val {exp=_, ty=lTy} = trexp left
+              val {exp=_, ty=rTy} = trexp right
+              fun arithmetic() =
+                let
+                  val _ = checkTy(T.INT, lTy, pos)
+                in {exp=(), ty=checkTy(T.INT, rTy, pos)} end
+              fun comparison() =
+                case lTy
+                  of T.INT =>
+                    {exp=(), ty=T.INT}
+                   | T.STRING =>
+                    {exp=(), ty=T.INT}
+                   | _ =>
+                    (error pos "comparison operands must be integers or strings";
+                    errExpty)
+              fun comparisoneq() =
+                case lTy
+                  of T.INT =>
+                    {exp=(), ty=T.INT}
+                   | T.STRING =>
+                    {exp=(), ty=T.INT}
+                   | T.RECORD(_, un) => (* TODO *)
+                    {exp=(), ty=T.INT}
+                   | T.ARRAY(_, un) => (* TODO *)
+                    {exp=(), ty=T.INT}
+                   | T.CLASS(_, un) => (* TODO *)
+                    {exp=(), ty=T.INT}
+                   | _ =>
+                    (error pos "comparison operands must be integers or strings";
+                    errExpty)
+            in
+              if lTy <> rTy then
+                (error pos "operands must have same type";
+                errExpty)
+              else
+                case oper
+                  of A.PlusOp =>
+                       arithmetic()
+                   | A.MinusOp =>
+                       arithmetic()
+                   | A.TimesOp =>
+                       arithmetic()
+                   | A.DivideOp =>
+                       arithmetic()
+                   | A.EqOp =>
+                       comparisoneq()
+                   | A.NeqOp =>
+                       comparisoneq()
+                   | A.LtOp =>
+                       comparison()
+                   | A.LeOp =>
+                       comparison()
+                   | A.GtOp =>
+                       comparison()
+                   | A.GeOp =>
+                       comparison()
+            end
         | trexp(A.RecordExp{fields, typ, pos}) =
           {exp=(), ty=T.UNIT} (* TODO *)
         | trexp(A.SeqExp exps) =
