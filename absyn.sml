@@ -35,7 +35,7 @@ struct
                | TypeDec of {name: symbol, ty: ty, pos: pos} list
                | ClassDec of {name: symbol,
                               parent: symbol,
-                              fields: classfield list,
+                              fields: attribute list,
                               pos: pos}
 
   and ty = NameTy of symbol * pos
@@ -45,7 +45,7 @@ struct
   and oper = PlusOp | MinusOp | TimesOp | DivideOp
                | EqOp | NeqOp | LtOp | LeOp | GtOp | GeOp
 
-  and classfield = ClassVarDec of {name: symbol,
+  and attribute = ClassVarDec of {name: symbol,
                            escape: bool ref,
                            typ: (symbol * pos) option,
                            init: exp,
@@ -59,5 +59,4 @@ struct
                   result: (symbol * pos) option,
                   body: exp,
                   pos: pos}
-
 end

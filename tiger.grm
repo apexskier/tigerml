@@ -27,8 +27,8 @@ structure A = Absyn
 %nonterm
    program      of A.exp
  | classdec     of A.dec
- | classfield   of A.classfield
- | classfields  of A.classfield list
+ | attribute    of A.attribute
+ | attributes   of A.attribute list
  | crfield      of (symbol * A.exp * A.pos) list
  | crrecord     of (symbol * A.exp * A.pos) list
  | ctlexp       of A.exp
@@ -121,11 +121,11 @@ fundec : FUNCTION ID LPAREN tyfields RPAREN EQ exp ({name=symbol ID, params=tyfi
        | FUNCTION ID LPAREN tyfields RPAREN COLON tyid EQ exp ({name=symbol ID, params=tyfields, result=SOME(tyid, tyidleft), body=exp, pos=IDleft})
 
 (* class declarations *)
-classdec : CLASS ID EXTENDS ID LBRACE classfields RBRACE (A.ClassDec{name=symbol ID1, parent=symbol ID2, fields=classfields, pos=CLASSleft})
-classfields : classfield classfields    ([classfield] @ classfields)
-            |                           ([])
-classfield : vardec                     (A.ClassVarDec vardec)
-           | methoddecs                 (A.MethodDec methoddecs)
+classdec : CLASS ID EXTENDS ID LBRACE attributes RBRACE (A.ClassDec{name=symbol ID1, parent=symbol ID2, fields=attributes, pos=CLASSleft})
+attributes : attribute attributes       ([attribute] @ attributes)
+           |                            ([])
+attribute : vardec                      (A.ClassVarDec vardec)
+          | methoddecs                  (A.MethodDec methoddecs)
 (* method declaration *)
 methoddecs : methoddec    %prec LOWPREC ([methoddec])
            | methoddec methoddecs       ([methoddec] @ methoddecs)

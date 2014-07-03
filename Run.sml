@@ -3,6 +3,7 @@ CM.make "sources.cm";
 let val args = CommandLine.arguments()
     val parsed = Parse.parse (hd args)
 in
-  PrintAbsyn.print(TextIO.stdOut, parsed)
+  PrintAbsyn.print(TextIO.stdOut, parsed);
+  Semant.transProg(parsed)
 end;
 OS.Process.exit(OS.Process.success)
