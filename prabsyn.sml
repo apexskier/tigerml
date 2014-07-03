@@ -84,7 +84,7 @@ struct
       | exp(A.MethodExp{var=v,name,args,pos},d) =
           (indent d; sayln "MethodExp("; var(v,d+1);
            say ","; say(Symbol.name name);
-           say ",["; dolist d exp args; say "])")
+           say ",["; dolist (d+1) exp args; say "])")
       | exp(A.NewExp(name, pos), d) =
           (indent d; say "NewExp("; say(Symbol.name name); say ")")
 

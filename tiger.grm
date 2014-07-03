@@ -171,7 +171,7 @@ exps : exp                              ([(exp, expright)])
 (* parameters *)
 params : param                          (param)
        |                                ([])
-param : param COMMA param               (param @ param)
+param : param COMMA param               (param1 @ param2)
       | exp                             ([exp])
 
 (* operation expressions, ordered by precedence *)
