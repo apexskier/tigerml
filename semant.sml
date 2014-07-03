@@ -41,6 +41,27 @@ struct
     let val A = actTy a
         val B = actTy b
     in
+      (*
+      case A
+        of T.RECORD _ => print "-----> record ?= "
+         | T.NIL => print "-----> nil ?= "
+         | T.INT => print "-----> int ?= "
+         | T.STRING => print "-----> string ?= "
+         | T.ARRAY _ => print "-----> array ?= "
+         | T.NAME _ => print "-----> name ?= "
+         | T.UNIT => print "-----> unit ?= "
+         | T.CLASS _ => print "-----> class ?= "
+         ;
+      case B
+        of T.RECORD _ => print "record\n"
+         | T.NIL => print "nil\n"
+         | T.INT => print "int\n"
+         | T.STRING => print "string\n"
+         | T.ARRAY _ => print "array\n"
+         | T.NAME _ => print "name\n"
+         | T.UNIT => print "unit\n"
+         | T.CLASS _ => print "class\n"
+         ; *)
       if A = B then true
       else
         case A
@@ -177,16 +198,15 @@ struct
                     {exp=(), ty=T.INT}
                    | T.ARRAY(_, un) => (* TODO *)
                     {exp=(), ty=T.INT}
+                   | T.NIL => (* TODO *)
+                    {exp=(), ty=T.INT}
                    | T.CLASS(_, un) => (* TODO *)
                     {exp=(), ty=T.INT}
                    | _ =>
-                    (error pos "comparison operands must be integers or strings";
+                    (error pos "equality operands cannot be UNIT or NAME";
                     errExpty)
             in
-              if lTy <> rTy then
-                (error pos "operands must have same type";
-                errExpty)
-              else
+              if tyEq(lTy, rTy) then
                 case oper
                   of A.PlusOp =>
                        arithmetic()
@@ -208,6 +228,9 @@ struct
                        comparison()
                    | A.GeOp =>
                        comparison()
+              else
+                (error pos "operands must have same type";
+                errExpty)
             end
         | trexp(A.RecordExp{fields, typ, pos}) =
           {exp=(), ty=T.UNIT} (* TODO *)
