@@ -63,17 +63,17 @@ struct
          | T.CLASS _ => print "class\n"
          ; *)
       if A = B then true
-      else
+      else (* TODO: resolve *)
         case A
           of T.NIL =>
-            ( case B
-                of T.RECORD(_, _) => true
-                 | _ => false )
-           | T.RECORD(c, d) =>
-            ( case B
-                of T.RECORD(c, d) => true
-                 | T.NIL => true
-                 | _ => false )
+            (case B
+              of T.RECORD(_, _) => true
+               | _ => false)
+           | T.RECORD(_, u) =>
+            (case B
+              of T.RECORD(_, u') => u = u'
+               | T.NIL => true
+               | _ => false)
            | _ => false
     end
 
@@ -233,7 +233,37 @@ struct
                 errExpty)
             end
         | trexp(A.RecordExp{fields, typ, pos}) =
-          errExpty (* TODO *)
+            (case S.look(tenv, typ)
+              of SOME(T.RECORD(fields', unique)) =>
+                let
+                  val len = length fields
+                  val len' = length fields'
+                in
+                  if len <> len' then
+                    (error pos ("unexpected number of fields: expected " ^ Int.toString len' ^ ", found " ^ Int.toString len);
+                    errExpty)
+                  else
+                    let
+                      fun matchField((sym', ty'), (sym, exp, pos)) =
+                        let
+                          val {exp=_, ty=expTy} = trexp exp
+                          val _ = tyEq(ty', expTy)
+                        in
+                          if sym' <> sym then
+                            error pos ("unexpected record field name: expected " ^ Symbol.name sym' ^ ", found " ^ Symbol.name sym)
+                          else
+                            if tyEq(ty', expTy) then ()
+                            else
+                              error pos ("invalid type for record field '" ^ Symbol.name sym' ^ "'")
+                        end
+                    in
+                      (ListPair.app matchField(fields', fields);
+                      {exp=(), ty=T.RECORD(fields', unique)})
+                    end
+                end
+               | _ =>
+                (error pos ("record type not found: '" ^ S.name typ ^ "'");
+                errExpty))
         | trexp(A.SeqExp exps) =
             (case exps
               of nil => errExpty
@@ -247,7 +277,7 @@ struct
                     in
                       newExp :: exps'
                     end
-                  val _ = foldr getexps [] exps @ [lastexp']
+                  val _ = foldl getexps [] exps @ [lastexp']
                 in
                   {exp=(), ty=lastty}
                 end)
@@ -290,7 +320,15 @@ struct
               {exp=(), ty=checkTy(T.UNIT, bTy, pos)})
             end
         | trexp(A.ForExp{var, escape, lo, hi, body, pos}) =
-          errExpty (* TODO *)
+            let val {exp=bodyExp, ty=bTy} =
+                  transExp(S.enter(venv, var, E.VarEntry{ty=T.INT}), tenv, body)
+                val {exp=loExp, ty=loTy} = trexp lo
+                val {exp=hiExp, ty=hiTy} = trexp hi
+                val _ = checkTy(T.INT, loTy, pos)
+                val _ = checkTy(T.INT, hiTy, pos)
+            in
+              {exp=(), ty=checkTy(T.UNIT, bTy, pos)}
+            end
         | trexp(A.BreakExp pos) =
           errExpty (* TODO *)
         | trexp(A.LetExp{decs, body, pos}) =
@@ -301,7 +339,21 @@ struct
               {exp=(), ty=ty}
             end
         | trexp(A.ArrayExp{typ, size, init, pos}) =
-          errExpty (* TODO *)
+            let val {exp=sizeExp, ty=sizeTy} = trexp size
+                val {exp=initExp, ty=initTy} = trexp init
+                val _ = checkTy(T.INT, sizeTy, pos)
+            in
+              case S.look(tenv, typ)
+                of SOME(T.ARRAY(ty, unique)) =>
+                  if tyEq(initTy, ty) then
+                    {exp=(), ty=T.ARRAY(ty, unique)}
+                  else
+                    (error pos ("unexpected init type: '" ^ S.name typ ^ "'");
+                    {exp=(), ty=T.UNIT})
+                 | _ =>
+                  (error pos ("unknown array type: '" ^ S.name typ ^ "'");
+                  {exp=(), ty=T.UNIT})
+            end
         | trexp(A.MethodExp{var, name, args, pos}) =
           errExpty (* TODO *)
         | trexp(A.NewExp(name, pos)) =
@@ -361,9 +413,23 @@ struct
                 (error pos ("unknown type '" ^ S.name name ^ "'");
                 T.UNIT))
         | trty(A.RecordTy fields) =
-          T.UNIT (* TODO *)
+            let
+              fun convertField({name, escape, typ, pos}, fields) =
+                case S.look(tenv, typ)
+                  of SOME(ty) => (name, ty) :: fields
+                   | NONE =>
+                    (error pos ("unknown type in record field: '" ^ S.name typ ^ "'");
+                    fields)
+            in
+              T.RECORD((foldr convertField [] fields), ref ())
+            end
         | trty(A.ArrayTy(name, pos)) =
-          T.UNIT (* TODO *)
+            (case S.look(tenv, name)
+              of SOME(ty) =>
+                T.ARRAY(ty, ref ())
+               | NONE =>
+                (error pos ("unknown array type: '" ^ S.name name ^ "'");
+                T.UNIT))
     in
       trty ty
     end
