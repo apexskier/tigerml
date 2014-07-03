@@ -1,17 +1,17 @@
 Group is
 
 absyn.sml
-errormsg.sml
 env.sml
+errormsg.sml
+parse.sml
+prabsyn.sml
 semant.sml
 symbol.sml
 table.sig
 table.sml
-types.sml
-parse.sml
-prabsyn.sml
 tiger.lex
 tiger.grm
+types.sml
 (* smlnj-lib.cm *)
 (* ml-yacc-lib.cm *)
 $/smlnj-lib.cm
