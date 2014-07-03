@@ -22,18 +22,42 @@ struct
   structure S = Symbol
 
   val error = ErrorMsg.error
+  val errExpty = {exp=(), ty=T.UNIT}
 
   type venv = E.enventry S.table
   type tenv = T.ty S.table
   type expty = {exp: unit, ty: T.ty}
 
+  (* Utility functions *)
   fun actTy(T.NAME(name, ty)) =
      (case !ty
         of NONE => (error 0 ("unknown name " ^ S.name name); T.UNIT)
          | SOME t => actTy t)
     | actTy t = t
+
   fun getSym(s: S.symbol, _) = s
 
+  fun tyEq(a, b) =
+        let val A = actTy a
+            val B = actTy b
+        in
+          if A = B
+          then true
+          else
+            case A
+              of T.NIL =>
+                ( case B
+                    of T.RECORD(_, _) => true
+                     | _ => false )
+               | T.RECORD(c, d) =>
+                ( case B
+                    of T.RECORD(c, d) => true
+                     | T.NIL => true
+                     | _ => false )
+               | _ => false
+        end
+
+  (* Main visible functions *)
   fun transVar(venv, tenv, var) =
     let
       fun trvar(A.SimpleVar(id, pos)) =
@@ -73,15 +97,41 @@ struct
   and transExp(venv, tenv, exp) =
     let
       fun trexp(A.VarExp var) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+            {exp=(), ty=(#ty(transVar(venv, tenv, var)))}
         | trexp(A.NilExp) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+            {exp=(), ty=T.NIL}
         | trexp(A.IntExp i) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+            {exp=(), ty=T.INT}
         | trexp(A.StringExp s) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+            {exp=(), ty=T.STRING} (* TODO *)
         | trexp(A.CallExp{func, args, pos}) =
-          {exp=(), ty=T.UNIT} (* TODO *)
+            (case S.look(venv, func)
+              of SOME(E.FunEntry{formals, result=resultTy}) =>
+                  let
+                    val frmsLen = length formals
+                    val argsLen = length args
+                    fun matchTy(a, f) =
+                      let
+                        val {exp=_, ty=ty} = trexp a
+                      in
+                        if tyEq(ty, f) then ()
+                        else
+                          error pos ("wrong argument type: '" ^ S.name func ^ "'")
+                      end
+                  in
+                    if frmsLen <> argsLen then
+                      (error pos ("incorrect number of arguments: found " ^ Int.toString argsLen ^ ", expected " ^ Int.toString frmsLen);
+                      errExpty)
+                    else
+                      (ListPair.app matchTy(args, formals);
+                      {exp=(), ty=resultTy})
+                  end
+               | SOME(E.VarEntry _) =>
+                  (error pos ("attempting to call a regular variable: '" ^ S.name func ^ "'");
+                  errExpty)
+               | NONE =>
+                  (error pos ("unknown function: '" ^ S.name func ^ "'");
+                  errExpty))
         | trexp(A.OpExp{left, oper, right, pos}) =
           {exp=(), ty=T.UNIT} (* TODO *)
         | trexp(A.RecordExp{fields, typ, pos}) =
@@ -145,6 +195,6 @@ struct
     end
 
   fun transProg(exp) =
-    ()
+    (transExp(E.base_venv, E.base_tenv, exp); ())
 
 end
