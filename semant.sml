@@ -41,7 +41,7 @@ struct
     let val A = actTy a
         val B = actTy b
     in
-      (*
+      (
       case A
         of T.RECORD _ => print "-----> record ?= "
          | T.NIL => print "-----> nil ?= "
@@ -61,9 +61,9 @@ struct
          | T.NAME _ => print "name\n"
          | T.UNIT => print "unit\n"
          | T.CLASS _ => print "class\n"
-         ; *)
+         ;
       if A = B then true
-      else (* TODO: resolve *)
+      else
         case A
           of T.NIL =>
             (case B
@@ -75,6 +75,7 @@ struct
                | T.NIL => true
                | _ => false)
            | _ => false
+           )
     end
 
   fun checkTy(req, ty, pos) =
@@ -355,7 +356,50 @@ struct
                   {exp=(), ty=T.UNIT})
             end
         | trexp(A.MethodExp{var, name, args, pos}) =
-          errExpty (* TODO *)
+            let
+              val {exp=_, ty} = transVar(venv, tenv, var)
+            in
+              case ty
+                of T.CLASS(attributes, _) =>
+                  (* got class attributes *)
+                  let
+                    fun matchAttr(s, _) =
+                      s = name
+                  in
+                    case List.find matchAttr attributes
+                      of SOME(_, attr) =>
+                        (case attr
+                          of T.METHOD{formals, result} =>
+                            let
+                              val frmsLen = length formals
+                              val argsLen = length args
+                              fun matchTy(a, f) =
+                                let
+                                  val {exp=_, ty=ty} = trexp a
+                                in
+                                  if tyEq(ty, f) then ()
+                                  else
+                                    error pos ("wrong argument type: '" ^ S.name name ^ "'")
+                                end
+                            in
+                              if frmsLen <> argsLen then
+                                (error pos ("incorrect number of arguments: found " ^ Int.toString argsLen ^ ", expected " ^ Int.toString frmsLen);
+                                errExpty)
+                              else
+                                (ListPair.app matchTy(args, formals);
+                                {exp=(), ty=result})
+                            end
+                           | T.CLASSVAR _ =>
+                            (error pos ("calling a class variable: '" ^ S.name name ^ "'");
+                            errExpty))
+                       | NONE =>
+                        (error pos ("calling unknown class attribute: '" ^ S.name name ^ "'");
+                        errExpty)
+                  end
+                 | _ =>
+                  (error pos ("attempting to call a method on something not a class instance: '" ^ S.name name ^ "'");
+                  errExpty)
+            end
         | trexp(A.NewExp(name, pos)) =
           errExpty (* TODO *)
     in
@@ -373,7 +417,7 @@ struct
   and transDec(venv, tenv, dec) =
     let
       fun trdec(A.FunctionDec fundecs) =
-          {venv=venv, tenv=tenv} (* TODO *)
+            {venv=venv, tenv=tenv} (* TODO *)
         | trdec(A.VarDec{name, escape, typ, init, pos}) =
             let
               val {exp=initExp, ty=initTy} = transExp(venv, tenv, init)
@@ -399,7 +443,79 @@ struct
               foldl trtydec {venv=venv, tenv=tenv} tydecs
             end
         | trdec(A.ClassDec{name, parent, fields, pos}) =
-          {venv=venv, tenv=tenv} (* TODO *)
+            let
+              val {venv=mvenv, tenv=_} = transMethodDecs(venv, tenv, fields)
+              val parent' = S.look(tenv, parent)
+              fun getTy'(s) =
+                (case S.look(tenv, s)
+                  of SOME(ty) => ty
+                   | NONE => T.UNIT)
+              fun getTy(typ) =
+                (case typ
+                  of SOME(s, _) =>
+                    getTy' s
+                   | NONE => T.UNIT)
+            in
+              case parent'
+                of SOME(T.CLASS(parAttrs, _)) =>
+                  let
+                    fun checkFieldMethoddecs({name, params, result, body, pos}, attrs) =
+                      let
+                        val resultTy = getTy result
+                        fun getTyp{name, escape, typ, pos} = getTy' typ
+                      in
+                        (name, T.METHOD{formals=map getTyp params, result=resultTy}) :: attrs
+                      end
+                    fun checkFields(field, attrs) =
+                      case field
+                        of A.ClassVarDec{name, escape, typ, init, pos} =>
+                          let
+                            val ty = getTy typ
+                          in
+                            (name, T.CLASSVAR{ty=ty}) :: attrs
+                          end
+                         | A.MethodDec methoddecs =>
+                          foldl checkFieldMethoddecs attrs methoddecs
+                    val attributes = foldl checkFields [] fields
+                    fun replaceAttrs(symbol, attr) =
+                      let
+                        fun matchAttr(s, _) =
+                          s = symbol
+                      in
+                        case List.find matchAttr attributes
+                          of SOME _ => false
+                           | NONE => true
+                      end
+                    val attributes' = List.filter replaceAttrs(parAttrs) @ attributes
+                    fun test(s, _) = print ("--- " ^ (S.name s) ^ "\n")
+                    val _ = app test attributes'
+                    val _ = print "-----\n"
+                  in
+                    (* TODO: Actually type check declarations *)
+                    {venv=venv, tenv=S.enter(tenv, name, T.CLASS(attributes, ref ()))}
+                  end
+                 | _ =>
+                  (error pos ("unknown parent class: '" ^ S.name parent ^ "'");
+                  {venv=venv, tenv=tenv})
+            end
+    in
+      trdec dec
+    end
+
+  and transMethodDecs(venv, tenv, decs) =
+    let
+      fun trdecs(dec, {venv, tenv}) =
+        transMethodDec(venv, tenv, dec)
+    in
+      foldl trdecs {venv=venv, tenv=tenv} decs
+    end
+
+  and transMethodDec(venv, tenv, dec) =
+    let
+      fun trdec(A.ClassVarDec{name, escape, typ, init, pos}) =
+            transDec(venv, tenv, A.VarDec{name=name, escape=escape, typ=typ, init=init, pos=pos})
+        | trdec(A.MethodDec fundecs) =
+            {venv=venv, tenv=tenv}
     in
       trdec dec
     end
