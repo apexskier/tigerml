@@ -7,8 +7,8 @@ sig
   type expty = {exp: unit, ty: Types.ty}
 
   val transVar : venv * tenv * Absyn.var -> expty
-  val transExp : venv * tenv * Absyn.exp -> expty
-  val transDec : venv * tenv * Absyn.dec -> {venv: venv, tenv: tenv}
+  val transExp : venv * tenv * Absyn.exp * bool -> expty
+  val transDec : venv * tenv * Absyn.dec-> {venv: venv, tenv: tenv}
   val transDecs : venv * tenv * Absyn.dec list -> {venv: venv, tenv: tenv}
   val transTy : tenv * Absyn.ty -> Types.ty
 end
@@ -77,24 +77,16 @@ struct
            | _ => false
     end
 
-  fun checkTy(req, ty, pos) =
-    let
-      val strTy =
-        case req
-          of T.RECORD _ => "record"
-           | T.NIL => "nil"
-           | T.INT => "int"
-           | T.STRING => "string"
-           | T.ARRAY _ => "array"
-           | T.NAME _ => "name"
-           | T.UNIT => "unit"
-           | T.CLASS _ => "class"
-    in
-      if tyEq(ty, req) then ty
-      else
-        (error pos ("wrong type: expected " ^ strTy);
-        ty)
-    end
+  fun strTy(ty) =
+    case ty
+      of T.RECORD _ => "record"
+       | T.NIL => "nil"
+       | T.INT => "int"
+       | T.STRING => "string"
+       | T.ARRAY _ => "array"
+       | T.NAME _ => "name"
+       | T.UNIT => "unit"
+       | T.CLASS _ => "class"
 
   (* Main visible functions *)
   fun transVar(venv, tenv, var) =
@@ -181,7 +173,7 @@ struct
       trvar var
     end
 
-  and transExp(venv, tenv, exp) =
+  and transExp(venv, tenv, exp, brkAlw) =
     let
       fun trexp(A.VarExp var) =
             {exp=(), ty=(#ty(transVar(venv, tenv, var)))}
@@ -225,8 +217,13 @@ struct
               val {exp=_, ty=rTy} = trexp right
               fun arithmetic() =
                 let
-                  val _ = checkTy(T.INT, lTy, pos)
-                in {exp=(), ty=checkTy(T.INT, rTy, pos)} end
+                  val _ =
+                    if tyEq(T.INT, lTy) then ()
+                    else error pos "left side of operator must be int"
+                  val _ =
+                    if tyEq(T.INT, rTy) then ()
+                    else error pos "right side of operator must be int"
+                in {exp=(), ty=T.INT} end
               fun comparison() =
                 case lTy
                   of T.INT =>
@@ -342,7 +339,9 @@ struct
         | trexp(A.IfExp{test, then'=th, else'=el, pos}) =
             let
               val {exp=_, ty=testTy} = trexp test
-              val _ = checkTy(T.INT, testTy, pos)
+              val _ =
+                if tyEq(T.INT, testTy) then ()
+                else error pos "if condition must have int type"
               val {exp=_, ty=thenTy} = trexp th
             in
               case el
@@ -357,39 +356,66 @@ struct
                       errExpty)
                   end
                  | NONE =>
-                     {exp=(), ty=checkTy(T.UNIT, thenTy, pos)}
+                  (if tyEq(T.UNIT, thenTy) then ()
+                   else
+                     error pos "if then expression must have unit type";
+                  {exp=(), ty=T.UNIT})
             end
         | trexp(A.WhileExp{test, body, pos}) =
             let
               val {exp=testExp, ty=tTy} = trexp test
-              val {exp=bodyExp, ty=bTy} = trexp body
+              val {exp=bodyExp, ty=bTy} = transExp(venv, tenv, body, true)
+              val _ =
+                if tyEq(T.INT, tTy) then ()
+                else
+                  error pos "while condition must have int type"
+              val _ =
+                if tyEq(T.UNIT, bTy) then ()
+                else
+                  error pos "while body must have unit type"
             in
-              (checkTy(T.INT, tTy, pos);
-              {exp=(), ty=checkTy(T.UNIT, bTy, pos)})
+              {exp=(), ty=T.UNIT}
             end
         | trexp(A.ForExp{var, escape, lo, hi, body, pos}) =
             let val {exp=bodyExp, ty=bTy} =
-                  transExp(S.enter(venv, var, E.VarEntry{ty=T.INT}), tenv, body)
+                  transExp(S.enter(venv, var, E.VarEntry{ty=T.INT}), tenv, body, true)
                 val {exp=loExp, ty=loTy} = trexp lo
                 val {exp=hiExp, ty=hiTy} = trexp hi
-                val _ = checkTy(T.INT, loTy, pos)
-                val _ = checkTy(T.INT, hiTy, pos)
+                val _ =
+                  if tyEq(T.INT, loTy) then ()
+                  else
+                    error pos "for loop's index must have int type"
+                val _ =
+                  if tyEq(T.INT, hiTy) then ()
+                  else
+                    error pos "for loop's index's upper bound must have int type"
+                val _ =
+                  if tyEq(T.UNIT, bTy) then ()
+                  else
+                    error pos "for loop's body must have unit type"
             in
-              {exp=(), ty=checkTy(T.UNIT, bTy, pos)}
+              {exp=(), ty=T.UNIT}
             end
         | trexp(A.BreakExp pos) =
-          errExpty (* TODO *)
+          if brkAlw then
+            {exp=(), ty=T.UNIT}
+          else
+            (error pos "break used outside of loop";
+            errExpty)
         | trexp(A.LetExp{decs, body, pos}) =
             let
               val {venv=venv', tenv=tenv'} = transDecs(venv, tenv, decs)
-              val {exp=bodyexp, ty=ty} = transExp(venv', tenv', body)
+              val {exp=bodyexp, ty=ty} = transExp(venv', tenv', body, brkAlw)
             in
               {exp=(), ty=ty}
             end
         | trexp(A.ArrayExp{typ, size, init, pos}) =
             let val {exp=sizeExp, ty=sizeTy} = trexp size
                 val {exp=initExp, ty=initTy} = trexp init
-                val _ = checkTy(T.INT, sizeTy, pos)
+                val _ =
+                  if tyEq(T.INT, sizeTy) then ()
+                  else
+                    error pos "array size must have int type"
             in
               case S.look(tenv, typ)
                 of SOME(T.ARRAY(ty, unique)) =>
@@ -517,8 +543,11 @@ struct
                   fun addParam((name, ty), venv') =
                     S.enter(venv', name, E.VarEntry{ty=ty})
                   val bodyEnv = foldl addParam recEnv formals
-                  val {exp=_, ty=bodyTy} = transExp(bodyEnv, tenv, body)
-                  val _ = checkTy(resultTy, bodyTy, pos)
+                  val {exp=_, ty=bodyTy} = transExp(bodyEnv, tenv, body, false)
+                  val _ =
+                    if tyEq(resultTy, bodyTy) then ()
+                    else
+                      error pos "function body and result types must match"
                 in
                   ()
                 end
@@ -529,7 +558,7 @@ struct
             end
         | trdec(A.VarDec{name, escape, typ, init, pos}) =
             let
-              val {exp=initExp, ty=initTy} = transExp(venv, tenv, init)
+              val {exp=initExp, ty=initTy} = transExp(venv, tenv, init, false)
             in
               case typ
                 of SOME(tyName, tyPos) =>
@@ -562,8 +591,10 @@ struct
                     if length numExists > 1 then
                       error pos ("redeclaring type in contiguous type declarations: '" ^ S.name name ^ "'")
                     else ()
+
+                  val newTy = transTy(initEnv, ty)
                 in
-                  {venv=venv, tenv=S.enter(tenv, name, transTy(initEnv, ty))}
+                  {venv=venv, tenv=S.enter(tenv, name, newTy)}
                 end
             in
               foldl trtydec {venv=venv, tenv=tenv} tydecs
@@ -590,7 +621,7 @@ struct
                          | NONE =>
                             let
                               (* TODO: should this have access to self? *)
-                              val {exp=_, ty=ty} = transExp(venv, tenv, init)
+                              val {exp=_, ty=ty} = transExp(venv, tenv, init, false)
                             in
                               (name, T.CLASSVAR{ty=ty}) :: attrs
                             end)
@@ -696,6 +727,6 @@ struct
     end
 
   fun transProg(exp) =
-    (transExp(E.base_venv, E.base_tenv, exp); ())
+    (transExp(E.base_venv, E.base_tenv, exp, false); ())
 
 end
