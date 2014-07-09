@@ -24,7 +24,7 @@ struct
   val error = ErrorMsg.error
   val errExpty = {exp=(), ty=T.UNIT}
 
-  val reservedWords = ["self"]
+  (* val reservedWords = ["self"] *) (* TODO: decide whether self should be a reserved word *)
 
   type venv = E.enventry S.table
   type tenv = T.ty S.table
@@ -298,11 +298,11 @@ struct
                           val _ = tyEq(ty', expTy)
                         in
                           if sym' <> sym then
-                            error pos ("unexpected record field name: expected " ^ Symbol.name sym' ^ ", found " ^ Symbol.name sym)
+                            error pos ("unexpected record field name: expected " ^ S.name sym' ^ ", found " ^ S.name sym)
                           else
                             if tyEq(ty', expTy) then ()
                             else
-                              error pos ("invalid type for record field '" ^ Symbol.name sym' ^ "'")
+                              error pos ("invalid type for record field '" ^ S.name sym' ^ "'")
                         end
                     in
                       (ListPair.app matchField(fields', fields);
@@ -442,10 +442,6 @@ struct
                   let
                     fun matchAttr(s, _) =
                       s = name
-                      val _ = print ("*** " ^ (S.name name) ^ "\n")
-                      fun test(s, _) = print ("--- " ^ (S.name s) ^ "\n")
-                      val _ = app test attributes
-                      val _ = print "-----\n"
                   in
                     case List.find matchAttr attributes
                       of SOME(_, attr) =>
@@ -569,10 +565,10 @@ struct
               fun eq(a) =
                 a = S.name name
             in
-              if List.exists eq reservedWords then
+              (* if List.exists eq reservedWords then
                 (error pos ("'" ^ S.name name ^ "' is a reserved word");
                 {venv=venv, tenv=tenv})
-              else
+              else *)
                 case typ
                   of SOME(tyName, tyPos) =>
                     (case S.look(tenv, tyName)
@@ -633,6 +629,7 @@ struct
                         of SOME(tys, _) => (name, T.CLASSVAR{ty=getTy(tys)}) :: attrs
                          | NONE =>
                             let
+                              (* any attrs seen thus far should be available in the venv and self stuff should be available *)
                               (* TODO: should this have access to self? *)
                               val {exp=_, ty=ty} = transExp(venv, tenv, init, false)
                             in
@@ -686,9 +683,28 @@ struct
               (* fun test(s, _) = print ("--- " ^ (S.name s) ^ "\n")
               val _ = app test allAttrs
               val _ = print "-----\n" *)
+
+              val classTy = T.CLASS(SOME(parentTy), allAttrs, ref ())
+
+              fun attrDec((s, attr), venv) =
+                case attr
+                  of T.CLASSVAR{ty} =>
+                    S.enter(venv, s, E.VarEntry{ty=ty})
+                   | T.METHOD{formals, result} =>
+                    S.enter(venv, s, E.FunEntry{formals=formals, result=result})
+              val methodEnv = S.enter(foldl attrDec venv allAttrs, S.symbol "self", E.VarEntry{ty=classTy})
+
+              fun transField(field) =
+                case field
+                  of A.ClassVarDec{name, escape, typ, init, pos} =>
+                    ()
+                   | A.MethodDec methoddecs =>
+                    (transDec(methodEnv, tenv, A.FunctionDec methoddecs); ())
+
+              val _ = app transField fields
             in
               (* TODO: 3 *)
-              {venv=venv, tenv=S.enter(tenv, name, T.CLASS(SOME(parentTy), allAttrs, ref ()))}
+              {venv=venv, tenv=S.enter(tenv, name, classTy)}
             end
     in
       trdec dec
