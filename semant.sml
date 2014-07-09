@@ -396,7 +396,7 @@ struct
                   if tyEq(initTy, ty) then
                     {exp=(), ty=T.ARRAY(ty, unique)}
                   else
-                    (error pos ("unexpected init type: '" ^ S.name typ ^ "'");
+                    (error pos ("init type doesn't match array type: '" ^ S.name typ ^ "'");
                     {exp=(), ty=T.UNIT})
                  | _ =>
                   (error pos ("unknown array type: '" ^ S.name typ ^ "'");
@@ -550,8 +550,21 @@ struct
             end
         | trdec(A.TypeDec tydecs) =
             let
+              fun crInitEnv({name, ty, pos}, tenv) =
+                S.enter(tenv, name, T.NIL)
+              val initEnv = foldl crInitEnv tenv tydecs
               fun trtydec({name, ty, pos}, {venv, tenv}) =
-                {venv=venv, tenv=S.enter(tenv, name, transTy(S.enter(tenv, name, T.NIL), ty))}
+                let
+                  fun testTy({name=name', ty, pos}) =
+                    name = name'
+                  val numExists = List.filter testTy tydecs
+                  val _ =
+                    if length numExists > 1 then
+                      error pos ("redeclaring type in contiguous type declarations: '" ^ S.name name ^ "'")
+                    else ()
+                in
+                  {venv=venv, tenv=S.enter(tenv, name, transTy(initEnv, ty))}
+                end
             in
               foldl trtydec {venv=venv, tenv=tenv} tydecs
             end
