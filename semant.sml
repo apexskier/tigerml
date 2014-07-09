@@ -90,10 +90,10 @@ struct
            | T.UNIT => "unit"
            | T.CLASS _ => "class"
     in
-      if ty <> req then
+      if tyEq(ty, req) then ty
+      else
         (error pos ("wrong type: expected " ^ strTy);
-        req)
-      else ty
+        ty)
     end
 
   (* Main visible functions *)
@@ -337,7 +337,7 @@ struct
               (if tyEq(varTy, expTy) then ()
               else
                 error pos "assignment type mismatch";
-              {exp=(), ty=varTy})
+              {exp=(), ty=T.UNIT})
             end
         | trexp(A.IfExp{test, then'=th, else'=el, pos}) =
             let
@@ -475,7 +475,58 @@ struct
   and transDec(venv, tenv, dec) =
     let
       fun trdec(A.FunctionDec fundecs) =
-            {venv=venv, tenv=tenv} (* TODO *)
+            let
+              fun basicFunDec({name, params, result, body, pos}, (funcs, venv)) =
+                let
+                  val resultTy =
+                    case result
+                      of SOME(s, _) =>
+                        (case S.look(tenv, s)
+                          of SOME(ty) => ty
+                           | NONE =>
+                            (error pos ("unknown type in '" ^ S.name name ^ "' function declaration: '" ^ S.name s ^ "'");
+                            T.UNIT))
+                       | NONE => T.UNIT
+                  fun checkParams({name, escape, typ, pos}, params) =
+                    case S.look(tenv, typ)
+                      of SOME(ty) =>
+                        (ty, (name, ty)) :: params
+                       | NONE =>
+                        (error pos ("unknown type for paramenter '" ^ S.name name ^ "': '" ^ S.name typ ^ "'");
+                        params)
+                  val paramsEnv = foldr checkParams nil params
+                  val (paramsTys, paramlist) = ListPair.unzip paramsEnv
+
+                  fun testFun({name=name', params, result, body, pos}) =
+                    name = name'
+                  val numExists = List.filter testFun fundecs
+                  val _ =
+                    if length numExists > 1 then
+                      error pos ("redeclaring function in contiguous function declarations: '" ^ S.name name ^ "'")
+                    else ()
+
+                  val funcEnv = S.enter(venv, name, E.FunEntry{formals=paramsTys, result=resultTy})
+                  val funcList = ((name, params, result, body, pos), paramlist, resultTy) :: funcs
+                in
+                  (funcList, funcEnv)
+                end
+              val (funcList, recEnv) = foldr basicFunDec (nil, venv) fundecs
+
+              fun checkFunc((name, params, result, body, pos), formals, resultTy) =
+                let
+                  fun addParam((name, ty), venv') =
+                    S.enter(venv', name, E.VarEntry{ty=ty})
+                  val bodyEnv = foldl addParam recEnv formals
+                  val {exp=_, ty=bodyTy} = transExp(bodyEnv, tenv, body)
+                  val _ = checkTy(resultTy, bodyTy, pos)
+                in
+                  ()
+                end
+
+              val _ = app checkFunc funcList
+            in
+              {tenv=tenv, venv=recEnv}
+            end
         | trdec(A.VarDec{name, escape, typ, init, pos}) =
             let
               val {exp=initExp, ty=initTy} = transExp(venv, tenv, init)
@@ -507,7 +558,7 @@ struct
             let
               fun getField(field, attrs) =
                 let
-                  fun checkTy(s) =
+                  fun getTy(s) =
                     case S.look(tenv, s)
                       of SOME(ty) =>
                         ty
@@ -518,7 +569,7 @@ struct
                   case field
                     of A.ClassVarDec{name, escape, typ, init, pos} =>
                       (case typ
-                        of SOME(tys, _) => (name, T.CLASSVAR{ty=checkTy(tys)}) :: attrs
+                        of SOME(tys, _) => (name, T.CLASSVAR{ty=getTy(tys)}) :: attrs
                          | NONE =>
                             let
                               (* TODO: should this have access to self? *)
@@ -531,11 +582,11 @@ struct
                         fun getMethod({name, params, result, body, pos}, attrs) =
                           let
                             fun checkParam{name, escape, typ, pos} =
-                              checkTy(typ)
+                              getTy(typ)
                             val formals = map checkParam params
                           in
                             (case result
-                              of SOME(tys, _) => (name, T.METHOD{formals=formals, result=checkTy(tys)}) :: attrs
+                              of SOME(tys, _) => (name, T.METHOD{formals=formals, result=getTy(tys)}) :: attrs
                                | NONE =>
                                    (name, T.METHOD{formals=formals, result=T.UNIT}) :: attrs)
                           end
