@@ -540,9 +540,13 @@ struct
                       {venv=S.enter(venv, name, E.VarEntry{ty=ty}), tenv=tenv})
                      | NONE =>
                       (error pos ("unknown type '" ^ S.name tyName ^ "' in variable declaration");
-                      {venv=venv, tenv=tenv}))
+                      {venv=S.enter(venv, name, E.VarEntry{ty=initTy}), tenv=tenv}))
                  | NONE =>
-                  {venv=S.enter(venv, name, E.VarEntry{ty=initTy}), tenv=tenv}
+                  if initTy = T.NIL then
+                    (error pos ("initializing non-record variable to nil: '" ^ S.name name ^ "'");
+                    {venv=S.enter(venv, name, E.VarEntry{ty=initTy}), tenv=tenv})
+                  else
+                    {venv=S.enter(venv, name, E.VarEntry{ty=initTy}), tenv=tenv}
             end
         | trdec(A.TypeDec tydecs) =
             let
