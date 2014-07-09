@@ -41,7 +41,7 @@ struct
     let val A = actTy a
         val B = actTy b
     in
-      (
+      (*
       case A
         of T.RECORD _ => print "-----> record ?= "
          | T.NIL => print "-----> nil ?= "
@@ -61,7 +61,7 @@ struct
          | T.NAME _ => print "name\n"
          | T.UNIT => print "unit\n"
          | T.CLASS _ => print "class\n"
-         ;
+         ; *)
       if A = B then true
       else
         case A
@@ -75,7 +75,6 @@ struct
                | T.NIL => true
                | _ => false)
            | _ => false
-           )
     end
 
   fun checkTy(req, ty, pos) =
@@ -113,14 +112,62 @@ struct
             (case #ty(trvar var)
               of T.RECORD(fields, _) =>
                   (* look up field *)
-                  let fun matchField(field) =
-                            id = getSym field
+                  let
+                    fun matchField(field) =
+                      id = getSym field
                   in
                     case List.find matchField fields
                       of SOME(_, ty) => {exp=(), ty=ty}
                        | NONE => (
                           error pos ("record field '" ^ S.name id ^ "' not found");
                           errExpty)
+                  end
+               | T.CLASS(parent, attrs, _) =>
+                  let
+                    (* generate list of attributes by recursing up inheritance *)
+                    fun getParent(pname, attrs) =
+                      let
+                        fun checkOverride(pAttrName, _) =
+                          let
+                            fun matchAttrs(s, _) = s = pAttrName
+                          in
+                            case List.find matchAttrs attrs
+                              of SOME _ => false
+                               | NONE => true
+                          end
+                      in
+                        case S.look(tenv, pname)
+                          of SOME(T.CLASS(parent', pattrs, parentU)) =>
+                              (case parent'
+                                of SOME p =>
+                                  getParent(p, List.filter checkOverride(pattrs) @ attrs)
+                                 | NONE =>
+                                  attrs)
+                           | _ =>
+                              (error pos ("parent class not found: '" ^ S.name pname ^ "'");
+                              attrs)
+                      end
+                    val allAttrs =
+                      case parent
+                        of SOME(p) => getParent(p, attrs)
+                         | _ => attrs
+
+                    (* find a matching class attribute *)
+                    fun findField(s, ty) = s = id
+                    val matchedAttr = List.find findField(allAttrs)
+                  in
+                    (* verify attribute is a variable *)
+                    case matchedAttr
+                      of SOME(s, attr) =>
+                        (case attr
+                          of T.CLASSVAR{ty} =>
+                            {exp=(), ty=ty}
+                           | T.METHOD _ =>
+                            (error pos ("using class method as class var: '" ^ S.name id ^ "'");
+                            errExpty))
+                       | NONE =>
+                        (error pos ("class attribute (var) not found: '" ^ S.name id ^ "'");
+                        errExpty)
                   end
                | _ => (
                   error pos ("accessing field '" ^ S.name id ^ "' on non-record");
@@ -498,12 +545,6 @@ struct
                 end
               val thisAttrs = foldr getField nil fields
 
-              val objectU =
-                case valOf(S.look(tenv, S.symbol("Object")))
-                  of T.CLASS(_, _, u) => u
-                   | _ =>
-                       (error pos "Object default class not found"; ref ())
-
               fun getParent(pname, attrs) =
                 let
                   fun checkOverride(pAttrName, _) =
@@ -517,18 +558,19 @@ struct
                 in
                   case S.look(tenv, pname)
                     of SOME(T.CLASS(parent', pattrs, parentU)) =>
-                        if parentU = objectU then
-                          attrs
-                        else
-                          List.filter checkOverride(pattrs) @ attrs
+                        (case parent'
+                          of SOME p =>
+                            getParent(p, List.filter checkOverride(pattrs) @ attrs)
+                           | NONE =>
+                            attrs)
                      | _ =>
                         (error pos ("parent class not found: '" ^ S.name pname ^ "'");
                         attrs)
                 end
               val allAttrs = getParent(parent, thisAttrs)
-              fun test(s, _) = print ("--- " ^ (S.name s) ^ "\n")
+              (* fun test(s, _) = print ("--- " ^ (S.name s) ^ "\n")
               val _ = app test allAttrs
-              val _ = print "-----\n"
+              val _ = print "-----\n" *)
             in
               (* TODO: 3 *)
               {venv=venv, tenv=S.enter(tenv, name, T.CLASS(SOME(parent), allAttrs, ref ()))}
