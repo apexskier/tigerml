@@ -201,7 +201,7 @@ struct
                     {exp=(), ty=T.INT}
                    | T.NIL => (* TODO *)
                     {exp=(), ty=T.INT}
-                   | T.CLASS(_, un) => (* TODO *)
+                   | T.CLASS(_, _, un) => (* TODO *)
                     {exp=(), ty=T.INT}
                    | _ =>
                     (error pos "equality operands cannot be UNIT or NAME";
@@ -360,8 +360,9 @@ struct
               val {exp=_, ty} = transVar(venv, tenv, var)
             in
               case ty
-                of T.CLASS(attributes, _) =>
+                of T.CLASS(parent, attributes, _) =>
                   (* got class attributes *)
+                  (* TODO: look at parent attributes *)
                   let
                     fun matchAttr(s, _) =
                       s = name
@@ -401,7 +402,17 @@ struct
                   errExpty)
             end
         | trexp(A.NewExp(name, pos)) =
-          errExpty (* TODO *)
+            (case S.look(tenv, name)
+              of SOME(typ) =>
+                (case typ
+                  of T.CLASS(parent, attrs, unique) =>
+                    {exp=(), ty=T.CLASS(parent, attrs, unique)}
+                   | _ =>
+                    (error pos ("attempting to create new instance of non class type: '" ^ S.name name ^ "'");
+                    errExpty))
+               | NONE =>
+                (error pos ("class not found: '" ^ S.name name ^ "'");
+                errExpty))
     in
       trexp exp
     end
@@ -443,60 +454,84 @@ struct
               foldl trtydec {venv=venv, tenv=tenv} tydecs
             end
         | trdec(A.ClassDec{name, parent, fields, pos}) =
+            (* 1. get all fields (symbol * attribute) and make sure types in attributes exist, typechecking var decs fully
+               2. iterate up parents to Object, adding fields from parents not overridden to head of list
+               3. type check method declarations, with a venv augmented with fields and self *)
             let
-              val {venv=mvenv, tenv=_} = transMethodDecs(venv, tenv, fields)
-              val parent' = S.look(tenv, parent)
-              fun getTy'(s) =
-                (case S.look(tenv, s)
-                  of SOME(ty) => ty
-                   | NONE => T.UNIT)
-              fun getTy(typ) =
-                (case typ
-                  of SOME(s, _) =>
-                    getTy' s
-                   | NONE => T.UNIT)
-            in
-              case parent'
-                of SOME(T.CLASS(parAttrs, _)) =>
-                  let
-                    fun checkFieldMethoddecs({name, params, result, body, pos}, attrs) =
+              fun getField(field, attrs) =
+                let
+                  fun checkTy(s) =
+                    case S.look(tenv, s)
+                      of SOME(ty) =>
+                        ty
+                       | NONE =>
+                        (error pos ("unknown type: '" ^ S.name s ^ "'");
+                        T.UNIT)
+                in
+                  case field
+                    of A.ClassVarDec{name, escape, typ, init, pos} =>
+                      (case typ
+                        of SOME(tys, _) => (name, T.CLASSVAR{ty=checkTy(tys)}) :: attrs
+                         | NONE =>
+                            let
+                              (* TODO: should this have access to self? *)
+                              val {exp=_, ty=ty} = transExp(venv, tenv, init)
+                            in
+                              (name, T.CLASSVAR{ty=ty}) :: attrs
+                            end)
+                     | A.MethodDec methoddecs =>
                       let
-                        val resultTy = getTy result
-                        fun getTyp{name, escape, typ, pos} = getTy' typ
-                      in
-                        (name, T.METHOD{formals=map getTyp params, result=resultTy}) :: attrs
-                      end
-                    fun checkFields(field, attrs) =
-                      case field
-                        of A.ClassVarDec{name, escape, typ, init, pos} =>
+                        fun getMethod({name, params, result, body, pos}, attrs) =
                           let
-                            val ty = getTy typ
+                            fun checkParam{name, escape, typ, pos} =
+                              checkTy(typ)
+                            val formals = map checkParam params
                           in
-                            (name, T.CLASSVAR{ty=ty}) :: attrs
+                            (case result
+                              of SOME(tys, _) => (name, T.METHOD{formals=formals, result=checkTy(tys)}) :: attrs
+                               | NONE =>
+                                   (name, T.METHOD{formals=formals, result=T.UNIT}) :: attrs)
                           end
-                         | A.MethodDec methoddecs =>
-                          foldl checkFieldMethoddecs attrs methoddecs
-                    val attributes = foldl checkFields [] fields
-                    fun replaceAttrs(symbol, attr) =
-                      let
-                        fun matchAttr(s, _) =
-                          s = symbol
                       in
-                        case List.find matchAttr attributes
-                          of SOME _ => false
-                           | NONE => true
+                        foldl getMethod attrs methoddecs
                       end
-                    val attributes' = List.filter replaceAttrs(parAttrs) @ attributes
-                    fun test(s, _) = print ("--- " ^ (S.name s) ^ "\n")
-                    val _ = app test attributes'
-                    val _ = print "-----\n"
-                  in
-                    (* TODO: Actually type check declarations *)
-                    {venv=venv, tenv=S.enter(tenv, name, T.CLASS(attributes, ref ()))}
-                  end
-                 | _ =>
-                  (error pos ("unknown parent class: '" ^ S.name parent ^ "'");
-                  {venv=venv, tenv=tenv})
+                end
+              val thisAttrs = foldr getField nil fields
+
+              val objectU =
+                case valOf(S.look(tenv, S.symbol("Object")))
+                  of T.CLASS(_, _, u) => u
+                   | _ =>
+                       (error pos "Object default class not found"; ref ())
+
+              fun getParent(pname, attrs) =
+                let
+                  fun checkOverride(pAttrName, _) =
+                    let
+                      fun matchAttrs(s, _) = s = pAttrName
+                    in
+                      case List.find matchAttrs attrs
+                        of SOME _ => false
+                         | NONE => true
+                    end
+                in
+                  case S.look(tenv, pname)
+                    of SOME(T.CLASS(parent', pattrs, parentU)) =>
+                        if parentU = objectU then
+                          attrs
+                        else
+                          List.filter checkOverride(pattrs) @ attrs
+                     | _ =>
+                        (error pos ("parent class not found: '" ^ S.name pname ^ "'");
+                        attrs)
+                end
+              val allAttrs = getParent(parent, thisAttrs)
+              fun test(s, _) = print ("--- " ^ (S.name s) ^ "\n")
+              val _ = app test allAttrs
+              val _ = print "-----\n"
+            in
+              (* TODO: 3 *)
+              {venv=venv, tenv=S.enter(tenv, name, T.CLASS(SOME(parent), allAttrs, ref ()))}
             end
     in
       trdec dec
@@ -515,7 +550,7 @@ struct
       fun trdec(A.ClassVarDec{name, escape, typ, init, pos}) =
             transDec(venv, tenv, A.VarDec{name=name, escape=escape, typ=typ, init=init, pos=pos})
         | trdec(A.MethodDec fundecs) =
-            {venv=venv, tenv=tenv}
+            transDec(venv, tenv, A.FunctionDec(fundecs))
     in
       trdec dec
     end

@@ -25,7 +25,7 @@ struct
   val base_tenv = S.enter(S.enter(S.enter(S.empty,
                     S.symbol("int"), T.INT),
                     S.symbol("string"), T.STRING),
-                    S.symbol("Object"), T.CLASS(nil, ref ()))
+                    S.symbol("Object"), T.CLASS(NONE, nil, ref ()))
 
   val base_venv = S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.empty,
                     S.symbol("print"),    FunEntry{formals=[T.STRING], result=T.UNIT}),

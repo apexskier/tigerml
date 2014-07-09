@@ -9,7 +9,7 @@ struct
               | ARRAY of ty * unique
               | NAME of Symbol.symbol * ty option ref
               | UNIT
-              | CLASS of (Symbol.symbol * attribute) list * unique
+              | CLASS of Symbol.symbol option * (Symbol.symbol * attribute) list * unique
 
   and attribute = CLASSVAR of {ty: ty}
                 | METHOD of {formals: ty list, result: ty}
