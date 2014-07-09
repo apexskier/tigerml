@@ -24,6 +24,8 @@ struct
   val error = ErrorMsg.error
   val errExpty = {exp=(), ty=T.UNIT}
 
+  val reservedWords = ["self"]
+
   type venv = E.enventry S.table
   type tenv = T.ty S.table
   type expty = {exp: unit, ty: T.ty}
@@ -74,6 +76,12 @@ struct
               of T.RECORD(_, u') => u = u'
                | T.NIL => true
                | _ => false)
+
+           | T.CLASS(parent, _, u) =>
+            (case parent
+              of SOME(parent) =>
+                tyEq(B, parent)
+               | NONE => false)
            | _ => false
     end
 
@@ -117,7 +125,7 @@ struct
                | T.CLASS(parent, attrs, _) =>
                   let
                     (* generate list of attributes by recursing up inheritance *)
-                    fun getParent(pname, attrs) =
+                    fun getParent(T.CLASS(parent', pattrs, parentU), attrs) =
                       let
                         fun checkOverride(pAttrName, _) =
                           let
@@ -128,16 +136,11 @@ struct
                                | NONE => true
                           end
                       in
-                        case S.look(tenv, pname)
-                          of SOME(T.CLASS(parent', pattrs, parentU)) =>
-                              (case parent'
-                                of SOME p =>
-                                  getParent(p, List.filter checkOverride(pattrs) @ attrs)
-                                 | NONE =>
-                                  attrs)
-                           | _ =>
-                              (error pos ("parent class not found: '" ^ S.name pname ^ "'");
-                              attrs)
+                        case parent'
+                          of SOME p =>
+                            getParent(p, List.filter checkOverride(pattrs) @ attrs)
+                           | NONE =>
+                            attrs
                       end
                     val allAttrs =
                       case parent
@@ -439,6 +442,10 @@ struct
                   let
                     fun matchAttr(s, _) =
                       s = name
+                      val _ = print ("*** " ^ (S.name name) ^ "\n")
+                      fun test(s, _) = print ("--- " ^ (S.name s) ^ "\n")
+                      val _ = app test attributes
+                      val _ = print "-----\n"
                   in
                     case List.find matchAttr attributes
                       of SOME(_, attr) =>
@@ -559,23 +566,29 @@ struct
         | trdec(A.VarDec{name, escape, typ, init, pos}) =
             let
               val {exp=initExp, ty=initTy} = transExp(venv, tenv, init, false)
+              fun eq(a) =
+                a = S.name name
             in
-              case typ
-                of SOME(tyName, tyPos) =>
-                  (case S.look(tenv, tyName)
-                    of SOME(ty) =>
-                      (if tyEq(initTy, ty) then ()
-                      else error pos ("variable type '" ^ S.name tyName ^ "' doesn't match initialization");
-                      {venv=S.enter(venv, name, E.VarEntry{ty=ty}), tenv=tenv})
-                     | NONE =>
-                      (error pos ("unknown type '" ^ S.name tyName ^ "' in variable declaration");
-                      {venv=S.enter(venv, name, E.VarEntry{ty=initTy}), tenv=tenv}))
-                 | NONE =>
-                  if initTy = T.NIL then
-                    (error pos ("initializing non-record variable to nil: '" ^ S.name name ^ "'");
-                    {venv=S.enter(venv, name, E.VarEntry{ty=initTy}), tenv=tenv})
-                  else
-                    {venv=S.enter(venv, name, E.VarEntry{ty=initTy}), tenv=tenv}
+              if List.exists eq reservedWords then
+                (error pos ("'" ^ S.name name ^ "' is a reserved word");
+                {venv=venv, tenv=tenv})
+              else
+                case typ
+                  of SOME(tyName, tyPos) =>
+                    (case S.look(tenv, tyName)
+                      of SOME(ty) =>
+                        (if tyEq(initTy, ty) then ()
+                        else error pos ("variable type '" ^ S.name tyName ^ "' doesn't match initialization");
+                        {venv=S.enter(venv, name, E.VarEntry{ty=ty}), tenv=tenv})
+                       | NONE =>
+                        (error pos ("unknown type '" ^ S.name tyName ^ "' in variable declaration");
+                        {venv=S.enter(venv, name, E.VarEntry{ty=initTy}), tenv=tenv}))
+                   | NONE =>
+                    if initTy = T.NIL then
+                      (error pos ("initializing non-record variable to nil: '" ^ S.name name ^ "'");
+                      {venv=S.enter(venv, name, E.VarEntry{ty=initTy}), tenv=tenv})
+                    else
+                      {venv=S.enter(venv, name, E.VarEntry{ty=initTy}), tenv=tenv}
             end
         | trdec(A.TypeDec tydecs) =
             let
@@ -644,7 +657,7 @@ struct
                 end
               val thisAttrs = foldr getField nil fields
 
-              fun getParent(pname, attrs) =
+              fun getParent(T.CLASS(parent', pattrs, parentU), attrs) =
                 let
                   fun checkOverride(pAttrName, _) =
                     let
@@ -655,24 +668,27 @@ struct
                          | NONE => true
                     end
                 in
-                  case S.look(tenv, pname)
-                    of SOME(T.CLASS(parent', pattrs, parentU)) =>
-                        (case parent'
-                          of SOME p =>
-                            getParent(p, List.filter checkOverride(pattrs) @ attrs)
-                           | NONE =>
-                            attrs)
-                     | _ =>
-                        (error pos ("parent class not found: '" ^ S.name pname ^ "'");
-                        attrs)
+                  case parent'
+                    of SOME p =>
+                      getParent(p, List.filter checkOverride(pattrs) @ attrs)
+                     | NONE =>
+                      attrs
                 end
-              val allAttrs = getParent(parent, thisAttrs)
+
+              val parentTy =
+                case S.look(tenv, parent)
+                  of SOME(ty) => ty
+                   | NONE =>
+                    (error pos ("parent type not found: '" ^ S.name parent ^ "'");
+                    valOf(S.look(tenv, S.symbol "Object")))
+
+              val allAttrs = getParent(parentTy, thisAttrs)
               (* fun test(s, _) = print ("--- " ^ (S.name s) ^ "\n")
               val _ = app test allAttrs
               val _ = print "-----\n" *)
             in
               (* TODO: 3 *)
-              {venv=venv, tenv=S.enter(tenv, name, T.CLASS(SOME(parent), allAttrs, ref ()))}
+              {venv=venv, tenv=S.enter(tenv, name, T.CLASS(SOME(parentTy), allAttrs, ref ()))}
             end
     in
       trdec dec
