@@ -547,7 +547,7 @@ struct
         | trdec(A.TypeDec tydecs) =
             let
               fun trtydec({name, ty, pos}, {venv, tenv}) =
-                {venv=venv, tenv=S.enter(tenv, name, transTy(tenv, ty))}
+                {venv=venv, tenv=S.enter(tenv, name, transTy(S.enter(tenv, name, T.NIL), ty))}
             in
               foldl trtydec {venv=venv, tenv=tenv} tydecs
             end
