@@ -13,4 +13,7 @@ struct
       print "\n";
       0
     end
+    handle Fail msg =>
+      (print ("\n## Compilation error\n" ^ msg ^ "\n");
+      1)
 end

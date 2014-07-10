@@ -6,10 +6,10 @@ sig
   type tenv = Types.ty Symbol.table
   type expty = {exp: unit, ty: Types.ty}
 
-  val transVar : venv * tenv * Absyn.var -> expty
-  val transExp : venv * tenv * Absyn.exp * bool -> expty
-  val transDec : venv * tenv * Absyn.dec -> {venv: venv, tenv: tenv}
-  val transDecs : venv * tenv * Absyn.dec list -> {venv: venv, tenv: tenv}
+  val transVar : venv * tenv * Absyn.var * Translate.level -> expty
+  val transExp : venv * tenv * Absyn.exp * Translate.level * bool -> expty
+  val transDec : venv * tenv * Absyn.dec * Translate.level -> {venv: venv, tenv: tenv}
+  val transDecs : venv * tenv * Absyn.dec list * Translate.level -> {venv: venv, tenv: tenv}
   val transTy : tenv * Absyn.ty -> Types.ty
 end
 
@@ -19,6 +19,7 @@ struct
   structure A = Absyn
   structure E = Env
   structure T = Types
+  structure Tr = Translate
   structure S = Symbol
 
   val error = ErrorMsg.error
@@ -97,12 +98,12 @@ struct
        | T.CLASS _ => "class"
 
   (* Main visible functions *)
-  fun transVar(venv, tenv, var) =
+  fun transVar(venv, tenv, var, level) =
     let
       fun trvar(A.SimpleVar(id, pos)) =
             (case S.look(venv, id)
-              of SOME(E.VarEntry{ty}) => {exp=(), ty=actTy ty}
-               | SOME(E.FunEntry{formals, result}) =>
+              of SOME(E.VarEntry{access, ty}) => {exp=(), ty=actTy ty}
+               | SOME(E.FunEntry{level, label, formals, result}) =>
                  (error pos ("function name used as var: '" ^ S.name id ^ "'");
                  errExpty)
                | NONE =>
@@ -158,7 +159,7 @@ struct
                     case matchedAttr
                       of SOME(s, attr) =>
                         (case attr
-                          of T.CLASSVAR{ty} =>
+                          of T.CLASSVAR{ty, access} =>
                             {exp=(), ty=ty}
                            | T.METHOD _ =>
                             (error pos ("using class method as class var: '" ^ S.name id ^ "'");
@@ -179,10 +180,10 @@ struct
       trvar var
     end
 
-  and transExp(venv, tenv, exp, brkAlw) =
+  and transExp(venv, tenv, exp, level, brkAlw) =
     let
       fun trexp(A.VarExp var) =
-            {exp=(), ty=(#ty(transVar(venv, tenv, var)))}
+            {exp=(), ty=(#ty(transVar(venv, tenv, var, level)))}
         | trexp(A.NilExp) =
             {exp=(), ty=T.NIL}
         | trexp(A.IntExp i) =
@@ -191,7 +192,7 @@ struct
             {exp=(), ty=T.STRING}
         | trexp(A.CallExp{func, args, pos}) =
             (case S.look(venv, func)
-              of SOME(E.FunEntry{formals, result=resultTy}) =>
+              of SOME(E.FunEntry{level, label, formals, result=resultTy}) =>
                   let
                     val frmsLen = length formals
                     val argsLen = length args
@@ -334,7 +335,7 @@ struct
                 end)
         | trexp(A.AssignExp{var, exp, pos}) =
             let
-              val {exp=_, ty=varTy} = transVar(venv, tenv, var)
+              val {exp=_, ty=varTy} = transVar(venv, tenv, var, level)
               val {exp=_, ty=expTy} = trexp exp
             in
               (if tyEq(varTy, expTy) then ()
@@ -370,7 +371,7 @@ struct
         | trexp(A.WhileExp{test, body, pos}) =
             let
               val {exp=testExp, ty=tTy} = trexp test
-              val {exp=bodyExp, ty=bTy} = transExp(venv, tenv, body, true)
+              val {exp=bodyExp, ty=bTy} = transExp(venv, tenv, body, level, true)
               val _ =
                 if tyEq(T.INT, tTy) then ()
                 else
@@ -383,22 +384,24 @@ struct
               {exp=(), ty=T.UNIT}
             end
         | trexp(A.ForExp{var, escape, lo, hi, body, pos}) =
-            let val {exp=bodyExp, ty=bTy} =
-                  transExp(S.enter(venv, var, E.VarEntry{ty=T.INT}), tenv, body, true)
-                val {exp=loExp, ty=loTy} = trexp lo
-                val {exp=hiExp, ty=hiTy} = trexp hi
-                val _ =
-                  if tyEq(T.INT, loTy) then ()
-                  else
-                    error pos "for loop's index must have int type"
-                val _ =
-                  if tyEq(T.INT, hiTy) then ()
-                  else
-                    error pos "for loop's index's upper bound must have int type"
-                val _ =
-                  if tyEq(T.UNIT, bTy) then ()
-                  else
-                    error pos "for loop's body must have unit type"
+            let
+              val idxAcc = Tr.allocLocal(level)(!escape)
+              val {exp=bodyExp, ty=bTy} =
+                transExp(S.enter(venv, var, E.VarEntry{access=idxAcc, ty=T.INT}), tenv, body, level, true)
+              val {exp=loExp, ty=loTy} = trexp lo
+              val {exp=hiExp, ty=hiTy} = trexp hi
+              val _ =
+                if tyEq(T.INT, loTy) then ()
+                else
+                  error pos "for loop's index must have int type"
+              val _ =
+                if tyEq(T.INT, hiTy) then ()
+                else
+                  error pos "for loop's index's upper bound must have int type"
+              val _ =
+                if tyEq(T.UNIT, bTy) then ()
+                else
+                  error pos "for loop's body must have unit type"
             in
               {exp=(), ty=T.UNIT}
             end
@@ -410,8 +413,8 @@ struct
             errExpty)
         | trexp(A.LetExp{decs, body, pos}) =
             let
-              val {venv=venv', tenv=tenv'} = transDecs(venv, tenv, decs)
-              val {exp=bodyexp, ty=ty} = transExp(venv', tenv', body, brkAlw)
+              val {venv=venv', tenv=tenv'} = transDecs(venv, tenv, decs, level)
+              val {exp=bodyexp, ty=ty} = transExp(venv', tenv', body, level, brkAlw)
             in
               {exp=(), ty=ty}
             end
@@ -436,7 +439,7 @@ struct
             end
         | trexp(A.MethodExp{var, name, args, pos}) =
             let
-              val {exp=_, ty} = transVar(venv, tenv, var)
+              val {exp=_, ty} = transVar(venv, tenv, var, level)
             in
               case ty
                 of T.CLASS(parent, attributes, _) =>
@@ -495,20 +498,21 @@ struct
       trexp exp
     end
 
-  and transDecs(venv, tenv, decs) =
+  and transDecs(venv, tenv, decs, level) =
     let
       fun trdecs(dec, {venv, tenv}) =
-        transDec(venv, tenv, dec)
+        transDec(venv, tenv, dec, level)
     in
       foldl trdecs {venv=venv, tenv=tenv} decs
     end
 
-  and transDec(venv, tenv, dec) =
+  and transDec(venv, tenv, dec, level) =
     let
       fun trdec(A.FunctionDec fundecs) =
             let
               fun basicFunDec({name, params, result, body, pos}, (funcs, venv)) =
                 let
+                  val newLevel = Tr.newLevel{parent=level, name=Temp.newLabel(), formals=map (fn(_)=>true) params}
                   val resultTy =
                     case result
                       of SOME(s, _) =>
@@ -521,7 +525,7 @@ struct
                   fun checkParams({name, escape, typ, pos}, params) =
                     case S.look(tenv, typ)
                       of SOME(ty) =>
-                        (ty, (name, ty)) :: params
+                        (ty, (name, ty, escape)) :: params
                        | NONE =>
                         (error pos ("unknown type for paramenter '" ^ S.name name ^ "': '" ^ S.name typ ^ "'");
                         params)
@@ -536,7 +540,7 @@ struct
                       error pos ("redeclaring function in contiguous function declarations: '" ^ S.name name ^ "'")
                     else ()
 
-                  val funcEnv = S.enter(venv, name, E.FunEntry{formals=paramsTys, result=resultTy})
+                  val funcEnv = S.enter(venv, name, E.FunEntry{level=level, label=Temp.newLabel(), formals=paramsTys, result=resultTy})
                   val funcList = ((name, params, result, body, pos), paramlist, resultTy) :: funcs
                 in
                   (funcList, funcEnv)
@@ -545,10 +549,11 @@ struct
 
               fun checkFunc((name, params, result, body, pos), formals, resultTy) =
                 let
-                  fun addParam((name, ty), venv') =
-                    S.enter(venv', name, E.VarEntry{ty=ty})
+                  val newLevel = Tr.newLevel{parent=level, name=Temp.newLabel(), formals=map (fn(_)=>true) params}
+                  fun addParam((name, ty, escape), venv') =
+                    S.enter(venv', name, E.VarEntry{access=Tr.allocLocal(newLevel)(!escape), ty=ty})
                   val bodyEnv = foldl addParam recEnv formals
-                  val {exp=_, ty=bodyTy} = transExp(bodyEnv, tenv, body, false)
+                  val {exp=_, ty=bodyTy} = transExp(bodyEnv, tenv, body, newLevel, false)
                   val _ =
                     if tyEq(resultTy, bodyTy) then ()
                     else
@@ -563,7 +568,7 @@ struct
             end
         | trdec(A.VarDec{name, escape, typ, init, pos}) =
             let
-              val {exp=initExp, ty=initTy} = transExp(venv, tenv, init, false)
+              val {exp=initExp, ty=initTy} = transExp(venv, tenv, init, level, false)
               fun eq(a) =
                 a = S.name name
             in
@@ -577,16 +582,16 @@ struct
                       of SOME(ty) =>
                         (if tyEq(initTy, ty) then ()
                         else error pos ("variable type '" ^ S.name tyName ^ "' doesn't match initialization");
-                        {venv=S.enter(venv, name, E.VarEntry{ty=ty}), tenv=tenv})
+                        {venv=S.enter(venv, name, E.VarEntry{access=Tr.allocLocal(level)(!escape), ty=ty}), tenv=tenv})
                        | NONE =>
                         (error pos ("unknown type '" ^ S.name tyName ^ "' in variable declaration");
-                        {venv=S.enter(venv, name, E.VarEntry{ty=initTy}), tenv=tenv}))
+                        {venv=S.enter(venv, name, E.VarEntry{access=Tr.allocLocal(level)(!escape), ty=initTy}), tenv=tenv}))
                    | NONE =>
                     if initTy = T.NIL then
                       (error pos ("initializing non-record variable to nil: '" ^ S.name name ^ "'");
-                      {venv=S.enter(venv, name, E.VarEntry{ty=initTy}), tenv=tenv})
+                      {venv=S.enter(venv, name, E.VarEntry{access=Tr.allocLocal(level)(!escape), ty=initTy}), tenv=tenv})
                     else
-                      {venv=S.enter(venv, name, E.VarEntry{ty=initTy}), tenv=tenv}
+                      {venv=S.enter(venv, name, E.VarEntry{access=Tr.allocLocal(level)(!escape), ty=initTy}), tenv=tenv}
             end
         | trdec(A.TypeDec tydecs) =
             let
@@ -617,7 +622,8 @@ struct
             (case S.look(tenv, parent)
               of SOME(parentTy) =>
                 let
-                  fun getParent(T.CLASS(parent', pattrs, parentU), attrs) = (* should be side effect free *)
+                  val selfAccess = Tr.allocLocal(level)(true)
+                  fun getParentAttrs(T.CLASS(parent', pattrs, parentU), attrs) = (* should be side effect free *)
                         let
                           fun checkOverride(pAttrName, _) =
                             let
@@ -630,11 +636,11 @@ struct
                         in
                           case parent'
                             of SOME p =>
-                              getParent(p, List.filter checkOverride(pattrs) @ attrs)
+                              getParentAttrs(p, List.filter checkOverride(pattrs) @ attrs)
                              | NONE =>
                               attrs
                         end
-                    | getParent(_, attrs) =
+                    | getParentAttrs(_, attrs) =
                         (error pos "parent not a class"; (* TODO: only should print once *)
                         attrs)
 
@@ -642,14 +648,14 @@ struct
                     let
                       fun attrDec((s, attr), venv) =
                         case attr
-                          of T.CLASSVAR{ty} =>
-                            S.enter(venv, s, E.VarEntry{ty=ty})
+                          of T.CLASSVAR{ty, access} =>
+                            S.enter(venv, s, E.VarEntry{access=access, ty=ty})
                            | T.METHOD{formals, result} =>
-                            S.enter(venv, s, E.FunEntry{formals=formals, result=result})
+                            S.enter(venv, s, E.FunEntry{level=level, label=Temp.newLabel(), formals=formals, result=result})
                     in
-                      S.enter(foldl attrDec venv (getParent(parentTy, attrs)),
+                      S.enter(foldl attrDec venv (getParentAttrs(parentTy, attrs)),
                               S.symbol "self",
-                              E.VarEntry{ty=T.CLASS(SOME(parentTy), attrs, ref ())})
+                              E.VarEntry{access=selfAccess, ty=T.CLASS(SOME(parentTy), attrs, ref ())})
                     end
 
                   fun getField(field, attrs) =
@@ -664,7 +670,7 @@ struct
                             let
                               val venv' = genrEnv(attrs)
                               val _ =
-                                transDec(venv', tenv, A.VarDec{name=name, escape=escape, typ=typ, init=init, pos=pos})
+                                transDec(venv', tenv, A.VarDec{name=name, escape=escape, typ=typ, init=init, pos=pos}, level)
                               val ty =
                                 case typ
                                   of SOME(tys, _) =>
@@ -672,10 +678,12 @@ struct
                                     getTy(tys))
                                    | NONE =>
                                     let
-                                      val {exp=_, ty=ty} = transExp(venv', tenv, init, false) (* TODO: Shouldn't print output, since this is run twice (also in transdec) *)
+                                      val {exp=_, ty=ty} = transExp(venv', tenv, init, level, false)
+                                      (* TODO: Shouldn't print output, since this is run twice (also in transdec) *)
                                     in ty end
+                              val access = Tr.allocLocal(level)(!escape)
                             in
-                              (name, T.CLASSVAR{ty=ty}) :: attrs
+                              (name, T.CLASSVAR{ty=ty, access=access}) :: attrs
                             end
                          | A.MethodDec methoddecs =>
                           let
@@ -697,7 +705,7 @@ struct
                     end
                   val thisAttrs = foldl getField nil fields
 
-                  val allAttrs = getParent(parentTy, thisAttrs)
+                  val allAttrs = getParentAttrs(parentTy, thisAttrs)
                   (* DEBUG: fun test(s, _) = print ("--- " ^ (S.name s) ^ "\n")
                   val _ = app test allAttrs
                   val _ = print "-----\n" *)
@@ -709,7 +717,7 @@ struct
                       of A.ClassVarDec{name, escape, typ, init, pos} =>
                         ()
                        | A.MethodDec methoddecs =>
-                        (transDec(methodEnv, tenv, A.FunctionDec methoddecs); ())
+                        (transDec(methodEnv, tenv, A.FunctionDec methoddecs, level); ())
 
                   val _ = app transField fields
                 in
@@ -718,24 +726,6 @@ struct
                | NONE =>
                 (error pos ("parent type not found: '" ^ S.name parent ^ "'");
                 {venv=venv, tenv=tenv}))
-    in
-      trdec dec
-    end
-
-  and transMethodDecs(venv, tenv, decs) =
-    let
-      fun trdecs(dec, {venv, tenv}) =
-        transMethodDec(venv, tenv, dec)
-    in
-      foldl trdecs {venv=venv, tenv=tenv} decs
-    end
-
-  and transMethodDec(venv, tenv, dec) =
-    let
-      fun trdec(A.ClassVarDec{name, escape, typ, init, pos}) =
-            transDec(venv, tenv, A.VarDec{name=name, escape=escape, typ=typ, init=init, pos=pos})
-        | trdec(A.MethodDec fundecs) =
-            transDec(venv, tenv, A.FunctionDec(fundecs))
     in
       trdec dec
     end
@@ -771,6 +761,11 @@ struct
     end
 
   fun transProg(exp) =
-    (transExp(E.base_venv, E.base_tenv, exp, false); ())
+    let
+      val startLevel = Tr.newLevel{parent=Tr.outermost, name=Temp.namedLabel("tigermain"), formals=[]}
+    in
+      transExp(E.base_venv, E.base_tenv, exp, startLevel, false);
+      ()
+    end
 
 end

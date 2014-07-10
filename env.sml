@@ -2,22 +2,28 @@ signature ENV =
 sig
   type access
   type ty = Types.ty
-  datatype enventry = VarEntry of {ty : ty}
-                    | FunEntry of {formals: ty list, result: ty}
+  datatype enventry = VarEntry of {access: Translate.access, ty : ty}
+                    | FunEntry of {level: Translate.level,
+                                   label: Temp.label,
+                                   formals: ty list,
+                                   result: ty}
   val base_tenv : ty Symbol.table
   val base_venv : enventry Symbol.table
 end
 
 structure Env : ENV =
 struct
-
   structure T = Types
+  structure Tr = Translate
   structure S = Symbol
 
   type access = unit
   type ty = T.ty
-  datatype enventry = VarEntry of {ty : ty}
-                    | FunEntry of {formals: ty list, result: ty}
+  datatype enventry = VarEntry of {access: Tr.access, ty : ty}
+                    | FunEntry of {level: Tr.level,
+                                   label: Temp.label,
+                                   formals: ty list,
+                                   result: ty}
 
   fun enter ((symbol, entry), env) =
     Symbol.enter(env, symbol, entry)
@@ -28,16 +34,44 @@ struct
                     S.symbol("Object"), T.CLASS(NONE, nil, ref ()))
 
   val base_venv = S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.empty,
-                    S.symbol("print"),    FunEntry{formals=[T.STRING], result=T.UNIT}),
-                    S.symbol("flush"),    FunEntry{formals=nil, result=T.UNIT}),
-                    S.symbol("getchar"),  FunEntry{formals=nil, result=T.STRING}),
-                    S.symbol("ord"),      FunEntry{formals=[T.STRING], result=T.INT}),
-                    S.symbol("chr"),      FunEntry{formals=[T.INT], result=T.STRING}),
-                    S.symbol("size"),     FunEntry{formals=[T.STRING], result=T.INT}),
-                    S.symbol("substring"),FunEntry{formals=[T.STRING,T.INT,T.INT], result=T.STRING}),
-                    S.symbol("concat"),   FunEntry{formals=[T.STRING,T.STRING], result=T.STRING}),
-                    S.symbol("not"),      FunEntry{formals=[T.INT], result=T.INT}),
-                    S.symbol("exit"),     FunEntry{formals=[T.INT], result=T.UNIT})
-
+                    S.symbol("print"),    FunEntry{level=Tr.outermost,
+                                                   label=Temp.namedLabel "print",
+                                                   formals=[T.STRING],
+                                                   result=T.UNIT}),
+                    S.symbol("flush"),    FunEntry{level=Tr.outermost,
+                                                   label=Temp.namedLabel "flush",
+                                                   formals=nil,
+                                                   result=T.UNIT}),
+                    S.symbol("getchar"),  FunEntry{level=Tr.outermost,
+                                                   label=Temp.namedLabel "getchar",
+                                                   formals=nil,
+                                                   result=T.STRING}),
+                    S.symbol("ord"),      FunEntry{level=Tr.outermost,
+                                                   label=Temp.namedLabel "ord",
+                                                   formals=[T.STRING],
+                                                   result=T.INT}),
+                    S.symbol("chr"),      FunEntry{level=Tr.outermost,
+                                                   label=Temp.namedLabel "chr",
+                                                   formals=[T.INT],
+                                                   result=T.STRING}),
+                    S.symbol("size"),     FunEntry{level=Tr.outermost,
+                                                   label=Temp.namedLabel "size",
+                                                   formals=[T.STRING],
+                                                   result=T.INT}),
+                    S.symbol("substring"),FunEntry{level=Tr.outermost,
+                                                   label=Temp.namedLabel "substring",
+                                                   formals=[T.STRING,T.INT,T.INT],
+                                                   result=T.STRING}),
+                    S.symbol("concat"),   FunEntry{level=Tr.outermost,
+                                                   label=Temp.namedLabel "concat",
+                                                   formals=[T.STRING,T.STRING],
+                                                   result=T.STRING}),
+                    S.symbol("not"),      FunEntry{level=Tr.outermost,
+                                                   label=Temp.namedLabel "not",
+                                                   formals=[T.INT],
+                                                   result=T.INT}),
+                    S.symbol("exit"),     FunEntry{level=Tr.outermost,
+                                                   label=Temp.namedLabel "exit",
+                                                   formals=[T.INT],
+                                                   result=T.UNIT})
 end
-
