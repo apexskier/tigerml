@@ -8,7 +8,7 @@ sig
 
   val transVar : venv * tenv * Absyn.var -> expty
   val transExp : venv * tenv * Absyn.exp * bool -> expty
-  val transDec : venv * tenv * Absyn.dec-> {venv: venv, tenv: tenv}
+  val transDec : venv * tenv * Absyn.dec -> {venv: venv, tenv: tenv}
   val transDecs : venv * tenv * Absyn.dec list -> {venv: venv, tenv: tenv}
   val transTy : tenv * Absyn.ty -> Types.ty
 end
@@ -126,22 +126,25 @@ struct
                   let
                     (* generate list of attributes by recursing up inheritance *)
                     fun getParent(T.CLASS(parent', pattrs, parentU), attrs) =
-                      let
-                        fun checkOverride(pAttrName, _) =
                           let
-                            fun matchAttrs(s, _) = s = pAttrName
+                            fun checkOverride(pAttrName, _) =
+                              let
+                                fun matchAttrs(s, _) = s = pAttrName
+                              in
+                                case List.find matchAttrs attrs
+                                  of SOME _ => false
+                                   | NONE => true
+                              end
                           in
-                            case List.find matchAttrs attrs
-                              of SOME _ => false
-                               | NONE => true
+                            case parent'
+                              of SOME p =>
+                                getParent(p, List.filter checkOverride(pattrs) @ attrs)
+                               | NONE =>
+                                attrs
                           end
-                      in
-                        case parent'
-                          of SOME p =>
-                            getParent(p, List.filter checkOverride(pattrs) @ attrs)
-                           | NONE =>
-                            attrs
-                      end
+                      | getParent(_, attrs) =
+                          (error pos "parent not a class";
+                          attrs)
                     val allAttrs =
                       case parent
                         of SOME(p) => getParent(p, attrs)
@@ -165,7 +168,7 @@ struct
                         errExpty)
                   end
                | _ => (
-                  error pos ("accessing field '" ^ S.name id ^ "' on non-record");
+                  error pos ("accessing field '" ^ S.name id ^ "' on something not a record or class");
                   errExpty))
         | trvar(A.SubscriptVar(var, exp, pos)) =
             (case #ty(trvar var)
@@ -438,7 +441,6 @@ struct
               case ty
                 of T.CLASS(parent, attributes, _) =>
                   (* got class attributes *)
-                  (* TODO: look at parent attributes *)
                   let
                     fun matchAttr(s, _) =
                       s = name
@@ -612,100 +614,110 @@ struct
             (* 1. get all fields (symbol * attribute) and make sure types in attributes exist, typechecking var decs fully
                2. iterate up parents to Object, adding fields from parents not overridden to head of list
                3. type check method declarations, with a venv augmented with fields and self *)
-            let
-              fun getField(field, attrs) =
+            (case S.look(tenv, parent)
+              of SOME(parentTy) =>
                 let
-                  fun getTy(s) =
-                    case S.look(tenv, s)
-                      of SOME(ty) =>
-                        ty
-                       | NONE =>
-                        (error pos ("unknown type: '" ^ S.name s ^ "'");
-                        T.UNIT)
-                in
-                  case field
-                    of A.ClassVarDec{name, escape, typ, init, pos} =>
-                      (case typ
-                        of SOME(tys, _) => (name, T.CLASSVAR{ty=getTy(tys)}) :: attrs
-                         | NONE =>
+                  fun getParent(T.CLASS(parent', pattrs, parentU), attrs) = (* should be side effect free *)
+                        let
+                          fun checkOverride(pAttrName, _) =
                             let
-                              (* any attrs seen thus far should be available in the venv and self stuff should be available *)
-                              (* TODO: should this have access to self? *)
-                              val {exp=_, ty=ty} = transExp(venv, tenv, init, false)
+                              fun matchAttrs(s, _) = s = pAttrName
+                            in
+                              case List.find matchAttrs attrs
+                                of SOME _ => false
+                                 | NONE => true
+                            end
+                        in
+                          case parent'
+                            of SOME p =>
+                              getParent(p, List.filter checkOverride(pattrs) @ attrs)
+                             | NONE =>
+                              attrs
+                        end
+                    | getParent(_, attrs) =
+                        (error pos "parent not a class"; (* TODO: only should print once *)
+                        attrs)
+
+                  fun genrEnv(attrs) =
+                    let
+                      fun attrDec((s, attr), venv) =
+                        case attr
+                          of T.CLASSVAR{ty} =>
+                            S.enter(venv, s, E.VarEntry{ty=ty})
+                           | T.METHOD{formals, result} =>
+                            S.enter(venv, s, E.FunEntry{formals=formals, result=result})
+                    in
+                      S.enter(foldl attrDec venv (getParent(parentTy, attrs)),
+                              S.symbol "self",
+                              E.VarEntry{ty=T.CLASS(SOME(parentTy), attrs, ref ())})
+                    end
+
+                  fun getField(field, attrs) =
+                    let
+                      fun getTy(s) =
+                        case S.look(tenv, s)
+                          of SOME(ty) => ty
+                           | NONE => T.UNIT
+                    in
+                      case field
+                        of A.ClassVarDec{name, escape, typ, init, pos} =>
+                            let
+                              val venv' = genrEnv(attrs)
+                              val _ =
+                                transDec(venv', tenv, A.VarDec{name=name, escape=escape, typ=typ, init=init, pos=pos})
+                              val ty =
+                                case typ
+                                  of SOME(tys, _) =>
+                                    (print ("----- " ^ S.name tys ^ "\n");
+                                    getTy(tys))
+                                   | NONE =>
+                                    let
+                                      val {exp=_, ty=ty} = transExp(venv', tenv, init, false) (* TODO: Shouldn't print output, since this is run twice (also in transdec) *)
+                                    in ty end
                             in
                               (name, T.CLASSVAR{ty=ty}) :: attrs
-                            end)
-                     | A.MethodDec methoddecs =>
-                      let
-                        fun getMethod({name, params, result, body, pos}, attrs) =
+                            end
+                         | A.MethodDec methoddecs =>
                           let
-                            fun checkParam{name, escape, typ, pos} =
-                              getTy(typ)
-                            val formals = map checkParam params
+                            fun getMethod({name, params, result, body, pos}, attrs) =
+                              let
+                                fun checkParam{name, escape, typ, pos} =
+                                  getTy(typ)
+                                val formals = map checkParam params
+                              in
+                                (case result
+                                  of SOME(tys, _) =>
+                                    (name, T.METHOD{formals=formals, result=getTy(tys)}) :: attrs
+                                   | NONE =>
+                                    (name, T.METHOD{formals=formals, result=T.UNIT}) :: attrs)
+                              end
                           in
-                            (case result
-                              of SOME(tys, _) => (name, T.METHOD{formals=formals, result=getTy(tys)}) :: attrs
-                               | NONE =>
-                                   (name, T.METHOD{formals=formals, result=T.UNIT}) :: attrs)
+                            foldl getMethod attrs methoddecs
                           end
-                      in
-                        foldl getMethod attrs methoddecs
-                      end
-                end
-              val thisAttrs = foldr getField nil fields
-
-              fun getParent(T.CLASS(parent', pattrs, parentU), attrs) =
-                let
-                  fun checkOverride(pAttrName, _) =
-                    let
-                      fun matchAttrs(s, _) = s = pAttrName
-                    in
-                      case List.find matchAttrs attrs
-                        of SOME _ => false
-                         | NONE => true
                     end
+                  val thisAttrs = foldl getField nil fields
+
+                  val allAttrs = getParent(parentTy, thisAttrs)
+                  (* DEBUG: fun test(s, _) = print ("--- " ^ (S.name s) ^ "\n")
+                  val _ = app test allAttrs
+                  val _ = print "-----\n" *)
+
+                  val methodEnv = genrEnv(allAttrs)
+
+                  fun transField(field) =
+                    case field
+                      of A.ClassVarDec{name, escape, typ, init, pos} =>
+                        ()
+                       | A.MethodDec methoddecs =>
+                        (transDec(methodEnv, tenv, A.FunctionDec methoddecs); ())
+
+                  val _ = app transField fields
                 in
-                  case parent'
-                    of SOME p =>
-                      getParent(p, List.filter checkOverride(pattrs) @ attrs)
-                     | NONE =>
-                      attrs
+                  {venv=venv, tenv=S.enter(tenv, name, T.CLASS(SOME(parentTy), allAttrs, ref ()))}
                 end
-
-              val parentTy =
-                case S.look(tenv, parent)
-                  of SOME(ty) => ty
-                   | NONE =>
-                    (error pos ("parent type not found: '" ^ S.name parent ^ "'");
-                    valOf(S.look(tenv, S.symbol "Object")))
-
-              val allAttrs = getParent(parentTy, thisAttrs)
-              (* fun test(s, _) = print ("--- " ^ (S.name s) ^ "\n")
-              val _ = app test allAttrs
-              val _ = print "-----\n" *)
-
-              val classTy = T.CLASS(SOME(parentTy), allAttrs, ref ())
-
-              fun attrDec((s, attr), venv) =
-                case attr
-                  of T.CLASSVAR{ty} =>
-                    S.enter(venv, s, E.VarEntry{ty=ty})
-                   | T.METHOD{formals, result} =>
-                    S.enter(venv, s, E.FunEntry{formals=formals, result=result})
-              val methodEnv = S.enter(foldl attrDec venv allAttrs, S.symbol "self", E.VarEntry{ty=classTy})
-
-              fun transField(field) =
-                case field
-                  of A.ClassVarDec{name, escape, typ, init, pos} =>
-                    ()
-                   | A.MethodDec methoddecs =>
-                    (transDec(methodEnv, tenv, A.FunctionDec methoddecs); ())
-
-              val _ = app transField fields
-            in
-              (* TODO: 3 *)
-              {venv=venv, tenv=S.enter(tenv, name, classTy)}
-            end
+               | NONE =>
+                (error pos ("parent type not found: '" ^ S.name parent ^ "'");
+                {venv=venv, tenv=tenv}))
     in
       trdec dec
     end
