@@ -33,3 +33,7 @@ Methods can access class variables declared before them, lexically.
 During semantic analysis, I'm going to generally assume the programmer knows
 what they are doing.  When typing errors are found, the compiler should go on
 as if variables had been declared and expressions result in their proper types
+
+## References/tidbits
+
+http://flint.cs.yale.edu/cs421/case-for-ml.html
