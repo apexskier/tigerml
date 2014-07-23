@@ -13,4 +13,6 @@ sig
   val FP : Temp.temp
   val wordsize : int
   val exp : access -> Tree.exp -> Tree.exp
+
+  val externalCall : string * Tree.exp list -> Tree.exp
 end

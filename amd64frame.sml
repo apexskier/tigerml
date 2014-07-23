@@ -47,4 +47,7 @@ struct
         (fn(fp) => Tree.MEM(Tree.BINOP(Tree.PLUS, fp, Tree.CONST k)))
     | exp(InReg(t)) =
         (fn(Fp) => Tree.TEMP t)
+
+  fun externalCall(name, args) =
+    Tree.CALL(Tree.NAME(Temp.namedLabel name), args)
 end

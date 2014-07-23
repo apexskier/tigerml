@@ -13,12 +13,14 @@ struct
       print "\n## Tree Form\n";
       let
         val fragments = Translate.getResult()
-        val first =
-          case hd fragments
-            of Amd64Frame.PROC{body, frame} => body
-             | Amd64Frame.STRING _ => Tree.EXP(Tree.CONST 0)
+        fun prFrag(frag) =
+          case frag
+            of Amd64Frame.PROC{body, frame} =>
+                Printtree.printtree(TextIO.stdOut, body)
+             | Amd64Frame.STRING(l, s) =>
+                print ((Symbol.name l) ^ ": \"" ^ s ^ "\"\n")
       in
-        Printtree.printtree(TextIO.stdOut, first)
+        app prFrag fragments
       end;
       print "\n";
       0

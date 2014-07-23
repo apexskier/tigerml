@@ -18,14 +18,25 @@ sig
   val unNx : exp -> Tree.stm
   val unCx : exp -> (Temp.label * Temp.label -> Tree.stm)
 
+  val arithExp : {oper:Absyn.oper, left:exp, right:exp} -> exp
+  val arrayExp : {size:exp, init:exp} -> exp
   val assignExp : exp * exp -> exp
+  val breakExp : Temp.label -> exp
+  val callExp : {name:Temp.label, level:level, funLevel:level, args:exp list} -> exp
+  val compareIntExp : {oper:Absyn.oper, left:exp, right:exp} -> exp
+  val compareNil : unit -> exp
+  val compareStrExp : {oper:Absyn.oper, left:exp, right:exp} -> exp
+  val compareRefEqExp : exp * exp -> exp
+  val forExp : {var:exp, body:exp, lo:exp, hi:exp, fin:Temp.label} -> exp
   val ifThenElseExp : exp * exp * exp -> exp
   val ifThenExp : exp * exp -> exp
   val intExp : int -> exp
+  val letExp : exp list * exp -> exp
   val seqExp : exp list -> exp
   val simpleVar : access * level -> exp
   val stringExp : string -> exp
-  val letExp : exp list * exp -> exp
+  val subscriptVar : {var:exp, loc:exp} -> exp
+  val whileExp : {test:exp, body:exp, fin:Temp.label} -> exp
 
   val procEntryExit : level * exp -> unit
   val getResult : unit -> Frame.frag list
@@ -33,6 +44,7 @@ end
 
 structure Translate : TRANSLATE =
 struct
+  structure A = Absyn
   structure Frame = Amd64Frame
   structure F = Frame
   structure T = Tree
@@ -47,6 +59,9 @@ struct
 
   val outermost = Outer
   val fragments = ref(nil:Frame.frag list)
+
+  val noBreak = Temp.newLabel()
+  val breakLabel = ref noBreak
 
   fun newLevel{parent, name, formals} =
     (* create a new frame, inserting an extra parameter for the static link *)
@@ -72,6 +87,17 @@ struct
   fun error(msg) =
     (print (msg ^ "\n");
     raise E.Error)
+
+  (* fun runtimeErr(msg) =
+    let
+      val errLab = Temp.newLabel()
+      val errTree =
+        seq[T.LABEL errLab,
+            T.EXP(T.CALL(T.NAME(Temp.namedLabel("print"),
+                         [unEx stringExp("rutime error: " ^ msg)])))]
+    in
+      (errLab, errTree)
+    end *)
 
   fun seq(nil) = unNx(emptyEx)
     | seq([s]) = s
@@ -129,8 +155,93 @@ struct
 
   (* Translation *)
 
+  fun arithExp{oper, left, right} =
+    let
+      val oper' =
+        case oper
+          of A.PlusOp => T.PLUS
+           | A.MinusOp => T.MINUS
+           | A.TimesOp => T.MUL
+           | A.DivideOp => T.DIV
+           | _ =>
+               (error "impossible" (* TODO: use errormessage.impossible *);
+               T.PLUS)
+    in
+      Ex(T.BINOP(oper', unEx left, unEx right))
+    end
+
+  fun arrayExp{size, init} =
+    Ex(F.externalCall("initArray", [unEx size, unEx init]))
+
   fun assignExp(var, exp) =
     Nx(T.MOVE(unEx var, unEx exp))
+
+  fun breakExp(lab) =
+    Nx(T.JUMP(T.NAME(lab), [lab]))
+
+  fun callExp{name, level, funLevel, args} =
+    Ex(T.CALL(T.NAME name, staticLink(level, funLevel) :: List.map unEx args))
+
+  fun compareIntExp{oper, left, right} =
+    let
+      val oper' =
+        case oper
+          of A.EqOp => T.EQ
+           | A.NeqOp => T.NE
+           | A.LtOp => T.LT
+           | A.LeOp => T.LE
+           | A.GtOp => T.GT
+           | A.GeOp => T.GE
+           | _ =>
+               (error "impossible" (* TODO: use errormessage.impossible *);
+               T.EQ)
+      val cx =
+        fn(t, f) =>
+          T.CJUMP(oper', unEx left, unEx right, t, f)
+    in
+      Cx(cx) (* TODO: should this produce one or zero? *)
+    end
+
+  fun compareNil() =
+    Ex(T.CONST 0) (* always false *)
+
+  fun compareStrExp{oper, left, right} =
+    let
+      val oper' =
+        case oper
+          of A.EqOp => "strEq"
+           | A.NeqOp => "strNeq"
+           | A.LtOp => "strLt"
+           | A.LeOp => "strLe"
+           | A.GtOp => "strGt"
+           | A.GeOp => "strGe"
+           | _ =>
+               (error "impossible" (* TODO: use errormessage.impossible *);
+               "")
+    in
+      Ex(Frame.externalCall(oper', [unEx left, unEx right]))
+    end
+
+  fun compareRefEqExp(left, right) =
+    Ex(Frame.externalCall("compareRef", [unEx left, unEx right]))
+
+  fun forExp{var, body, lo, hi, fin} =
+    let
+      val bodyLab = Temp.newLabel()
+      and finLab = fin
+      val _ = breakLabel := finLab
+      val testCx =
+        fn(t, f) =>
+          T.CJUMP(T.GE, unEx var, unEx hi, t, f)
+    in
+      Nx(seq[T.MOVE(unEx lo, unEx var),
+             (testCx)(finLab, bodyLab),
+             T.LABEL bodyLab,
+             unNx body,
+             T.EXP(T.BINOP(T.PLUS, unEx var, T.CONST 1)),
+             (testCx)(finLab, bodyLab),
+             T.LABEL finLab])
+    end
 
   fun ifThenElseExp(test, th, el) =
     let
@@ -179,16 +290,32 @@ struct
     in
       case th
         of (Ex _) =>
-          Ex(T.ESEQ(seq[(testCx)(thenLab, finLab),
+          Ex(T.ESEQ(seq[(testCx)(thLab, finLab),
                         T.LABEL thLab,
                         T.MOVE(T.TEMP r, unEx th),
                         T.LABEL finLab],
-                    T.TMEP r))
+                    T.TEMP r))
          | (Nx _) =>
+          Nx(seq[(testCx)(thLab, finLab),
+                 T.LABEL thLab,
+                 T.MOVE(T.TEMP r, unEx th),
+                 T.LABEL finLab])
+         | (Cx _) =>
+          Cx(fn(t, f) =>
+            seq[(testCx)(thLab, finLab),
+                T.LABEL thLab,
+                (unCx th)(t, f),
+                T.LABEL finLab])
+    end
 
 
   fun intExp(i) =
     Ex(T.CONST i)
+
+  fun letExp(nil, body) =
+        body
+    | letExp(decs, body) =
+        Ex(T.ESEQ(seq(List.map unNx decs), unEx body))
 
   fun seqExp(nil) =
         emptyEx
@@ -216,10 +343,54 @@ struct
       Ex(T.NAME l)
     end
 
-  fun letExp(nil, body) =
-        body
-    | letExp(decs, body) =
-        Ex(T.ESEQ(seq(List.map unNx decs), unEx body))
+  fun subscriptVar{var, loc} =
+    let
+      (* TODO: bounds checking *)
+      (* val errLab = Temp.newLabel()
+      val errTree =
+        seq[T.LABEL errLab,
+            T.EXP(T.CALL(T.NAME(Temp.namedLabel("print")),
+                         [unEx(stringExp("runtime error: " ^ "subscripting out of bounds" ^ "\n"))]))]
+      val hiChkLab = Temp.newLabel()
+      and goodLab = Temp.newLabel()
+      and finLab = Temp.newLabel() *)
+      val loc' = unEx loc
+      val var' = unEx var
+      (* val loChk =
+        fn(t, f) =>
+          T.CJUMP(T.LT, loc', T.CONST 0, t, f)
+      val hiChk =
+        fn(t, f) =>
+          T.CJUMP(T.GT, loc', var', t, f) *)
+    in
+      Ex((* seq[ (loChk)(errLab, hiChkLab),
+             T.LABEL hiChkLab,
+             (hiChk)(errLab, goodLab),
+             T.LABEL goodLab,
+             T.EXP) *)T.MEM(T.BINOP(T.PLUS, var', loc')))(* ,
+             T.JUMP(T.NAME finLab, [finLab]),
+             errTree,
+             T.LABEL finLab]) *)
+    end
+
+  fun whileExp{test, body, fin} =
+    let
+      val testCx = unCx test
+      val idx = Temp.newTemp()
+      val finLab = fin
+      and testLab = Temp.newLabel()
+      and bodyLab = Temp.newLabel()
+      val _ = breakLabel := finLab
+    in
+      Nx(seq[T.LABEL testLab,
+             (testCx)(bodyLab, finLab),
+             T.LABEL bodyLab,
+             unNx body,
+             T.JUMP(T.NAME testLab, [testLab]),
+             T.LABEL finLab])
+    end
+
+
 
   fun procEntryExit(Level({frame, parent}, _), body:exp) =
         fragments := F.PROC{body=unNx(body)

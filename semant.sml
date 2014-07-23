@@ -7,7 +7,7 @@ sig
   type expty = {exp: Translate.exp, ty: Types.ty}
 
   val transVar : venv * tenv * Absyn.var * Translate.level -> expty
-  val transExp : venv * tenv * Absyn.exp * Translate.level * bool -> expty
+  val transExp : venv * tenv * Absyn.exp * Translate.level * Temp.label -> expty
   val transDec : venv * tenv * Absyn.dec * Translate.level -> {venv: venv, tenv: tenv}
   val transDecs : venv * tenv * Absyn.dec list * Translate.level -> {venv: venv, tenv: tenv}
   val transTy : tenv * Absyn.ty -> Types.ty
@@ -25,6 +25,7 @@ struct
   val error = ErrorMsg.error
   val errExpty = {exp=Tr.emptyEx, ty=T.UNIT}
   val todoEx = Tr.emptyEx
+  val noBreak = Temp.newLabel()
 
   (* val reservedWords = ["self"] *) (* TODO: decide whether self should be a reserved word *)
 
@@ -175,10 +176,19 @@ struct
                   error pos ("accessing field '" ^ S.name id ^ "' on something not a record or class");
                   errExpty))
         | trvar(A.SubscriptVar(var, exp, pos)) =
-            (case #ty(trvar var)
-              of T.ARRAY(ty, _) => {exp=todoEx, ty=ty}
-               | _ => (error pos "subscripting non-array";
-                  errExpty))
+            let
+              val {exp=varExp, ty=varTy} = trvar var
+              val {exp=expExp, ty=expTy} = transExp(venv, tenv, exp, level, noBreak)
+            in
+              if tyEq(expTy, T.INT) then
+                case varTy
+                  of T.ARRAY(ty, _) => {exp=Tr.subscriptVar{var=varExp, loc=expExp}, ty=ty}
+                   | _ => (error pos "subscripting non-array";
+                      errExpty)
+              else
+                (error pos ("subscripting with non integer");
+                errExpty)
+            end
     in
       trvar var
     end
@@ -186,7 +196,7 @@ struct
   and transExp(venv, tenv, exp, level, brkAlw) =
     let
       fun trexp(A.VarExp var) =
-            {exp=todoEx, ty=(#ty(transVar(venv, tenv, var, level)))}
+            transVar(venv, tenv, var, level)
         | trexp(A.NilExp) =
             {exp=Tr.emptyEx, ty=T.NIL}
         | trexp(A.IntExp i) =
@@ -195,7 +205,7 @@ struct
             {exp=Tr.stringExp(s), ty=T.STRING}
         | trexp(A.CallExp{func, args, pos}) =
             (case S.look(venv, func)
-              of SOME(E.FunEntry{level, label, formals, result=resultTy}) =>
+              of SOME(E.FunEntry{level=funlevel, label, formals, result=resultTy}) =>
                   let
                     val frmsLen = length formals
                     val argsLen = length args
@@ -213,7 +223,10 @@ struct
                       errExpty)
                     else
                       (ListPair.app matchTy(args, formals);
-                      {exp=todoEx, ty=resultTy})
+                      {exp=Tr.callExp{name=label,
+                                   level=level,
+                                   funLevel=funlevel,
+                                   args=(List.map getExp)(List.map trexp args)}, ty=resultTy})
                   end
                | SOME(E.VarEntry _) =>
                   (error pos ("attempting to call a regular variable: '" ^ S.name func ^ "'");
@@ -233,30 +246,30 @@ struct
                   val _ =
                     if tyEq(T.INT, rTy) then ()
                     else error pos "right side of operator must be int"
-                in {exp=todoEx, ty=T.INT} end
+                in {exp=Tr.arithExp{oper=oper, left=leftExp, right=rightExp}, ty=T.INT} end
               fun comparison() =
                 case lTy
                   of T.INT =>
-                    {exp=todoEx, ty=T.INT}
+                    {exp=Tr.compareIntExp{oper=oper, left=leftExp, right=rightExp}, ty=T.INT}
                    | T.STRING =>
-                    {exp=todoEx, ty=T.INT}
+                    {exp=Tr.compareStrExp{oper=oper, left=leftExp, right=rightExp}, ty=T.INT}
                    | _ =>
                     (error pos "comparison operands must be integers or strings";
                     errExpty)
               fun comparisoneq() =
                 case lTy
                   of T.INT =>
-                    {exp=todoEx, ty=T.INT}
+                    {exp=Tr.compareIntExp{oper=oper, left=leftExp, right=rightExp}, ty=T.INT}
                    | T.STRING =>
-                    {exp=todoEx, ty=T.INT}
-                   | T.RECORD(_, un) => (* TODO *)
-                    {exp=todoEx, ty=T.INT}
-                   | T.ARRAY(_, un) => (* TODO *)
-                    {exp=todoEx, ty=T.INT}
-                   | T.NIL => (* TODO *)
-                    {exp=todoEx, ty=T.INT}
-                   | T.CLASS(_, _, un) => (* TODO *)
-                    {exp=todoEx, ty=T.INT}
+                    {exp=Tr.compareStrExp{oper=oper, left=leftExp, right=rightExp}, ty=T.INT}
+                   | T.RECORD(_, un) =>
+                    {exp=Tr.compareRefEqExp(leftExp, rightExp), ty=T.INT}
+                   | T.ARRAY(_, un) =>
+                    {exp=Tr.compareRefEqExp(leftExp, rightExp), ty=T.INT}
+                   | T.NIL =>
+                    {exp=Tr.compareNil(), ty=T.INT}
+                   | T.CLASS(_, _, un) =>
+                    {exp=Tr.compareRefEqExp(leftExp, rightExp), ty=T.INT}
                    | _ =>
                     (error pos "equality operands cannot be UNIT or NAME";
                     errExpty)
@@ -373,8 +386,9 @@ struct
             end
         | trexp(A.WhileExp{test, body, pos}) =
             let
+              val finLab = Temp.newLabel()
               val {exp=testExp, ty=tTy} = trexp test
-              val {exp=bodyExp, ty=bTy} = transExp(venv, tenv, body, level, true)
+              val {exp=bodyExp, ty=bTy} = transExp(venv, tenv, body, level, finLab)
               val _ =
                 if tyEq(T.INT, tTy) then ()
                 else
@@ -384,13 +398,14 @@ struct
                 else
                   error pos "while body must have unit type"
             in
-              {exp=todoEx, ty=T.UNIT}
+              {exp=Tr.whileExp{test=testExp, body=bodyExp, fin=finLab}, ty=T.UNIT}
             end
         | trexp(A.ForExp{var, escape, lo, hi, body, pos}) =
             let
+              val finLab = Temp.newLabel()
               val idxAcc = Tr.allocLocal(level)(!escape)
               val {exp=bodyExp, ty=bTy} =
-                transExp(S.enter(venv, var, E.VarEntry{access=idxAcc, ty=T.INT}), tenv, body, level, true)
+                transExp(S.enter(venv, var, E.VarEntry{access=idxAcc, ty=T.INT}), tenv, body, level, finLab)
               val {exp=loExp, ty=loTy} = trexp lo
               val {exp=hiExp, ty=hiTy} = trexp hi
               val _ =
@@ -406,11 +421,11 @@ struct
                 else
                   error pos "for loop's body must have unit type"
             in
-              {exp=todoEx, ty=T.UNIT}
+              {exp=Tr.forExp{var=Tr.simpleVar(idxAcc, level), body=bodyExp, lo=loExp, hi=hiExp, fin=finLab}, ty=T.UNIT}
             end
         | trexp(A.BreakExp pos) =
-          if brkAlw then
-            {exp=todoEx, ty=T.UNIT}
+          if brkAlw <> noBreak then
+            {exp=Tr.breakExp(brkAlw), ty=T.UNIT}
           else
             (error pos "break used outside of loop";
             errExpty)
@@ -432,13 +447,13 @@ struct
               case S.look(tenv, typ)
                 of SOME(T.ARRAY(ty, unique)) =>
                   if tyEq(initTy, ty) then
-                    {exp=todoEx, ty=T.ARRAY(ty, unique)}
+                    {exp=Tr.arrayExp{size=sizeExp, init=initExp}, ty=T.ARRAY(ty, unique)}
                   else
                     (error pos ("init type doesn't match array type: '" ^ S.name typ ^ "'");
-                    {exp=todoEx, ty=T.UNIT})
+                    errExpty)
                  | _ =>
                   (error pos ("unknown array type: '" ^ S.name typ ^ "'");
-                  {exp=todoEx, ty=T.UNIT})
+                  errExpty)
             end
         | trexp(A.MethodExp{var, name, args, pos}) =
             let
@@ -556,7 +571,7 @@ struct
                   fun addParam((name, ty, escape), venv') =
                     S.enter(venv', name, E.VarEntry{access=Tr.allocLocal(newLevel)(!escape), ty=ty})
                   val bodyEnv = foldl addParam recEnv formals
-                  val {exp=bodyExp, ty=bodyTy} = transExp(bodyEnv, tenv, body, newLevel, false)
+                  val {exp=bodyExp, ty=bodyTy} = transExp(bodyEnv, tenv, body, newLevel, noBreak)
                   val _ =
                     if tyEq(resultTy, bodyTy) then ()
                     else
@@ -571,7 +586,7 @@ struct
             end
         | trdec(A.VarDec{name, escape, typ, init, pos}) =
             let
-              val {exp=initExp, ty=initTy} = transExp(venv, tenv, init, level, false)
+              val {exp=initExp, ty=initTy} = transExp(venv, tenv, init, level, noBreak)
               fun eq(a) =
                 a = S.name name
             in
@@ -681,7 +696,7 @@ struct
                                     getTy(tys))
                                    | NONE =>
                                     let
-                                      val {exp=initExp, ty=ty} = transExp(venv', tenv, init, level, false)
+                                      val {exp=initExp, ty=ty} = transExp(venv', tenv, init, level, noBreak)
                                       (* TODO: Shouldn't print output, since this is run twice (also in transdec) *)
                                     in ty end
                               val access = Tr.allocLocal(level)(!escape)
@@ -769,7 +784,7 @@ struct
     in
       Tr.procEntryExit(startLevel,
         getExp(
-          transExp(E.base_venv, E.base_tenv, exp, startLevel, false)))
+          transExp(E.base_venv, E.base_tenv, exp, startLevel, noBreak)))
     end
 
 end
