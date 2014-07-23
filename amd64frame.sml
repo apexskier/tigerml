@@ -1,9 +1,10 @@
 structure Amd64Frame : FRAME =
 struct
-
   type frame = {name: Temp.label, formals: bool list, locals: int ref}
   datatype access = InFrame of int
                   | InReg of Temp.temp
+  datatype frag = PROC of {body: Tree.stm, frame: frame}
+                | STRING of Temp.label * string
 
   val wordsize = 8
 
@@ -37,5 +38,4 @@ struct
         !escacc = !escacc + 1;
         formalToAcc(b, escacc)
       end
-
 end
