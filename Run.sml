@@ -10,6 +10,16 @@ struct
       PrintAbsyn.print(TextIO.stdOut, parsed);
       print "\n## Type checking\n";
       Semant.transProg(parsed);
+      print "\n## Tree Form\n";
+      let
+        val fragments = Translate.getResult()
+        val first =
+          case hd fragments
+            of Amd64Frame.PROC{body, frame} => body
+             | Amd64Frame.STRING _ => Tree.EXP(Tree.CONST 0)
+      in
+        Printtree.printtree(TextIO.stdOut, first)
+      end;
       print "\n";
       0
     end

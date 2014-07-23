@@ -8,6 +8,10 @@ struct
 
   val wordsize = 8
 
+  val rsp = Temp.newTemp()
+
+  val FP = rsp
+
   fun newFrame{name, formals} =
     {name=name, formals=formals, locals=ref 0}
 
@@ -38,4 +42,9 @@ struct
         !escacc = !escacc + 1;
         formalToAcc(b, escacc)
       end
+
+  fun exp(InFrame(k)) =
+        (fn(fp) => Tree.MEM(Tree.BINOP(Tree.PLUS, fp, Tree.CONST k)))
+    | exp(InReg(t)) =
+        (fn(Fp) => Tree.TEMP t)
 end
