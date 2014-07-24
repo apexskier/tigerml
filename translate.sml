@@ -9,6 +9,7 @@ sig
   val outermost : level
   val fragments : Frame.frag list ref
   val emptyEx : exp
+  val todoEx : exp
 
   val newLevel : {parent:level, name:Temp.label, formals:bool list} -> level
   val formals : level -> Frame.access list
@@ -38,9 +39,10 @@ sig
   val simpleVar : access * level -> exp
   val stringExp : string -> exp
   val subscriptVar : {var:exp, loc:exp} -> exp
+  val varDec : {init:exp, level:level, access:access} -> exp
   val whileExp : {test:exp, body:exp, fin:Temp.label} -> exp
 
-  val procEntryExit : level * exp -> unit
+  val procEntryExit : level * exp * bool -> unit
   val getResult : unit -> Frame.frag list
 end
 
@@ -53,27 +55,27 @@ struct
   structure E = ErrorMsg
 
   datatype level = Outer
-                 | Level of {frame:Frame.frame, parent:level} * unit ref
-  type access = level * Frame.access
+                 | Level of {frame:F.frame, parent:level} * unit ref
+  type access = level * F.access
   datatype exp = Ex of Tree.exp                            (* expression with result *)
                | Nx of Tree.stm                            (* no result *)
                | Cx of Temp.label * Temp.label -> Tree.stm (* conditional *)
 
   val outermost = Outer
-  val fragments = ref(nil:Frame.frag list)
+  val fragments = ref(nil:F.frag list)
 
   val noBreak = Temp.newLabel()
   val breakLabel = ref noBreak
 
   fun newLevel{parent, name, formals} =
     (* create a new frame, inserting an extra parameter for the static link *)
-    Level({frame=Frame.newFrame({name=name, formals=true :: formals}), parent=parent}, ref ())
+    Level({frame=F.newFrame({name=name, formals=true :: formals}), parent=parent}, ref ())
 
   fun formals(level) =
     case level
       of Outer => []
        | Level({frame, parent}, _) =>
-        Frame.formals(frame)
+        F.formals(frame)
 
   fun allocLocal(level) =
     case level
@@ -81,10 +83,11 @@ struct
         raise Fail "Allocating locals at outermost level"
        | Level({frame, parent}, _) =>
         (fn(g) =>
-          (level, Frame.allocLocal(frame)(g)))
+          (level, F.allocLocal(frame)(g)))
 
   (* Utilities *)
-  val emptyEx = Ex(T.CONST 42)
+  val emptyEx = Ex(T.CONST 0)
+  val todoEx = Ex(T.CONST 42)
 
   fun error(msg) =
     (print (msg ^ "\n");
@@ -221,14 +224,14 @@ struct
                (error "impossible" (* TODO: use errormessage.impossible *);
                "")
     in
-      Ex(Frame.externalCall(oper', [unEx left, unEx right]))
+      Ex(F.externalCall(oper', [unEx left, unEx right]))
     end
 
   fun compareRefEqExp(left, right) =
-    Ex(Frame.externalCall("compareRef", [unEx left, unEx right]))
+    Ex(F.externalCall("compareRef", [unEx left, unEx right]))
 
   fun fieldVar{var, pos} =
-    Ex(T.MEM(T.BINOP(T.PLUS, unEx var, T.CONST(pos * Frame.wordsize))))
+    Ex(T.MEM(T.BINOP(T.PLUS, unEx var, T.CONST(pos * F.wordsize))))
 
   fun forExp{var, body, lo, hi, fin} =
     let
@@ -351,7 +354,7 @@ struct
     in
       case acclev
         of Level({frame=frame, parent=parentLevel}, _) =>
-          Ex(F.exp(fracc)(staticLink(#1 access, level)))
+          Ex(F.exp(fracc)(staticLink(acclev, level)))
          | Outer =>
           error "illegal: variable access at outermost level"
     end
@@ -360,38 +363,40 @@ struct
     let
       val l = Temp.newLabel()
     in
-      fragments := Frame.STRING(l, s) :: !fragments;
+      fragments := F.STRING(l, s) :: !fragments;
       Ex(T.NAME l)
     end
 
   fun subscriptVar{var, loc} =
     let
       (* TODO: bounds checking *)
-      (* val errLab = Temp.newLabel()
-      val errTree =
-        seq[T.LABEL errLab,
-            T.EXP(T.CALL(T.NAME(Temp.namedLabel("print")),
-                         [unEx(stringExp("runtime error: " ^ "subscripting out of bounds" ^ "\n"))]))]
+      val errLab = Temp.newLabel()
       val hiChkLab = Temp.newLabel()
       and goodLab = Temp.newLabel()
-      and finLab = Temp.newLabel() *)
       val loc' = unEx loc
       val var' = unEx var
-      (* val loChk =
+      val loChk =
         fn(t, f) =>
           T.CJUMP(T.LT, loc', T.CONST 0, t, f)
       val hiChk =
         fn(t, f) =>
-          T.CJUMP(T.GT, loc', var', t, f) *)
+          T.CJUMP(T.GT, loc', var', t, f)
     in
-      Ex((* seq[ (loChk)(errLab, hiChkLab),
-             T.LABEL hiChkLab,
-             (hiChk)(errLab, goodLab),
-             T.LABEL goodLab,
-             T.EXP) *)T.MEM(T.BINOP(T.PLUS, var', loc')))(* ,
-             T.JUMP(T.NAME finLab, [finLab]),
-             errTree,
-             T.LABEL finLab]) *)
+      Ex(T.ESEQ(seq[(loChk)(errLab, hiChkLab),
+                    T.LABEL hiChkLab,
+                    (hiChk)(errLab, goodLab),
+                    T.LABEL errLab,
+                    T.EXP(T.CALL(T.NAME(Temp.namedLabel("print")),
+                                 [unEx(stringExp("runtime error: " ^ "subscripting out of bounds" ^ "\n"))])),
+                    T.LABEL goodLab],
+                T.MEM(T.BINOP(T.PLUS, var', loc'))))
+    end
+
+  fun varDec{init, level, access} =
+    let
+      val place = simpleVar(access, level)
+    in
+      Nx(T.MOVE(unEx place, unEx init))
     end
 
   fun whileExp{test, body, fin} =
@@ -413,12 +418,17 @@ struct
 
 
 
-  fun procEntryExit(Level({frame, parent}, _), body:exp) =
-        fragments := F.PROC{body=unNx(body)
-                                 (* seq[T.MOVE(T.TEMP(hd F.argregs), T.TEMP F.FP),
-                                     T.MOVE(T.TEMP Frame.RA unEx body)] *),
-                            frame=frame} :: !fragments
-    | procEntryExit(Outer, body:exp) =
+  fun procEntryExit(Level({frame, parent}, _), body:exp, returns:bool) =
+        let
+          val tree =
+            if returns then
+              T.MOVE(T.TEMP F.RA, unEx body)
+            else unNx body
+        in
+          fragments := F.PROC{body=tree,
+                              frame=frame} :: !fragments
+        end
+    | procEntryExit(Outer, body:exp, returns:bool) =
         print "procEntryExit entering at outer level\n"
 
   fun getResult() = !fragments

@@ -24,6 +24,4 @@ struct
   fun newLabel() = Symbol.symbol(F.format "L%d" [F.INT(postinc labs)])
   val namedLabel = Symbol.symbol
 end
-
-
 end

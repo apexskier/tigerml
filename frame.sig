@@ -11,6 +11,7 @@ sig
                 | STRING of Temp.label * string
 
   val FP : Temp.temp
+  val RA : Temp.temp
   val wordsize : int
   val exp : access -> Tree.exp -> Tree.exp
 

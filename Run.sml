@@ -6,19 +6,21 @@ struct
       val _ = print "\n## Lexical Analysis\n";
       val parsed = Parse.parse ("test.tig")
     in
-      print "\n## Abstract Syntax Tree\n";
-      PrintAbsyn.print(TextIO.stdOut, parsed);
       print "\n## Type checking\n";
       Semant.transProg(parsed);
+      print "\n## Abstract Syntax Tree\n";
+      PrintAbsyn.print(TextIO.stdOut, parsed);
       print "\n## Tree Form\n";
       let
         val fragments = Translate.getResult()
         fun prFrag(frag) =
-          case frag
+          (case frag
             of Amd64Frame.PROC{body, frame} =>
-                Printtree.printtree(TextIO.stdOut, body)
+                (print (Symbol.name(Amd64Frame.name(frame)) ^ ":\n");
+                Printtree.printtree(TextIO.stdOut, body))
              | Amd64Frame.STRING(l, s) =>
-                print ((Symbol.name l) ^ ": \"" ^ s ^ "\"\n")
+                print ((Symbol.name l) ^ ": \"" ^ s ^ "\"\n");
+          print "\n")
       in
         app prFrag fragments
       end;

@@ -24,7 +24,7 @@ struct
 
   val error = ErrorMsg.error
   val errExpty = {exp=Tr.emptyEx, ty=T.UNIT}
-  val todoEx = Tr.emptyEx
+  val todoEx = Tr.todoEx
   val noBreak = Temp.newLabel()
 
   (* val reservedWords = ["self"] *) (* TODO: decide whether self should be a reserved word *)
@@ -230,9 +230,9 @@ struct
                     else
                       (ListPair.app matchTy(args, formals);
                       {exp=Tr.callExp{name=label,
-                                   level=level,
-                                   funLevel=funlevel,
-                                   args=(List.map getExp)(List.map trexp args)}, ty=resultTy})
+                                      level=level,
+                                      funLevel=funlevel,
+                                      args=(List.map getExp)(List.map trexp args)}, ty=resultTy})
                   end
                | SOME(E.VarEntry _) =>
                   (error pos ("attempting to call a regular variable: '" ^ S.name func ^ "'");
@@ -351,7 +351,7 @@ struct
                     in
                       newExp :: exps'
                     end
-                  val exps'' = foldl getexps [] exps @ [lastexp']
+                  val exps'' = foldr getexps [] exps @ [lastexp']
                 in
                   {exp=Tr.seqExp(exps''), ty=lastty}
                 end)
@@ -534,9 +534,10 @@ struct
     let
       fun trdec(A.FunctionDec fundecs) =
             let
-              fun basicFunDec({name, params, result, body, pos}, (funcs, venv)) =
+              fun basicFunDec({name, params, result, body, pos}, (funcs, venv, levels)) =
                 let
-                  val newLevel = Tr.newLevel{parent=level, name=Temp.newLabel(), formals=map (fn(_)=>true) params}
+                  val label = (* Temp.newLabel() *)Temp.namedLabel(Symbol.name name)
+                  val newLevel = Tr.newLevel{parent=level, name=label, formals=map (fn(_)=>true) params}
                   val resultTy =
                     case result
                       of SOME(s, _) =>
@@ -564,29 +565,26 @@ struct
                       error pos ("redeclaring function in contiguous function declarations: '" ^ S.name name ^ "'")
                     else ()
 
-                  val funcEnv = S.enter(venv, name, E.FunEntry{level=level, label=Temp.newLabel(), formals=paramsTys, result=resultTy})
+                  val funcEnv = S.enter(venv, name, E.FunEntry{level=level, label=label, formals=paramsTys, result=resultTy})
                   val funcList = ((name, params, result, body, pos), paramlist, resultTy) :: funcs
                 in
-                  (funcList, funcEnv)
+                  (funcList, funcEnv, newLevel :: levels)
                 end
-              val (funcList, recEnv) = foldr basicFunDec (nil, venv) fundecs
+              val (funcList, recEnv, levels) = foldr basicFunDec (nil, venv, nil) fundecs
 
-              fun checkFunc((name, params, result, body, pos), formals, resultTy) =
+              fun checkFunc(((name, params, result, body, pos), formals, resultTy), newLevel) =
                 let
-                  val newLevel = Tr.newLevel{parent=level, name=Temp.newLabel(), formals=map (fn(_)=>true) params}
                   fun addParam((name, ty, escape), venv') =
                     S.enter(venv', name, E.VarEntry{access=Tr.allocLocal(newLevel)(!escape), ty=ty})
                   val bodyEnv = foldl addParam recEnv formals
                   val {exp=bodyExp, ty=bodyTy} = transExp(bodyEnv, tenv, body, newLevel, noBreak)
-                  val _ =
-                    if tyEq(resultTy, bodyTy) then ()
-                    else
-                      error pos "function body and result types must match"
                 in
-                  ()
+                  if tyEq(resultTy, bodyTy) then
+                    Tr.procEntryExit(newLevel, bodyExp, if tyEq(resultTy, T.UNIT) then false else true)
+                  else
+                    error pos "function body and result types must match"
                 end
-
-              val _ = app checkFunc funcList
+              val _ = ListPair.appEq checkFunc (funcList, levels)
             in
               {venv=recEnv, tenv=tenv, exps=exps}
             end
@@ -595,6 +593,11 @@ struct
               val {exp=initExp, ty=initTy} = transExp(venv, tenv, init, level, noBreak)
               fun eq(a) =
                 a = S.name name
+              val access = Tr.allocLocal(level)(!escape)
+              val initExp' = Tr.varDec{init=initExp, level=level, access=access}
+              val ret = {venv=S.enter(venv, name, E.VarEntry{access=access, ty=initTy}),
+                         tenv=tenv,
+                         exps=initExp'::exps}
             in
               (* if List.exists eq reservedWords then
                 (error pos ("'" ^ S.name name ^ "' is a reserved word");
@@ -604,26 +607,16 @@ struct
                   of SOME(tyName, tyPos) =>
                     (case S.look(tenv, tyName)
                       of SOME(ty) =>
-                        (if tyEq(initTy, ty) then ()
-                        else error pos ("variable type '" ^ S.name tyName ^ "' doesn't match initialization");
-                        {venv=S.enter(venv, name, E.VarEntry{access=Tr.allocLocal(level)(!escape), ty=ty}),
-                         tenv=tenv,
-                         exps=initExp::exps})
+                        if tyEq(initTy, ty) then ()
+                        else error pos ("variable type '" ^ S.name tyName ^ "' doesn't match initialization")
                        | NONE =>
-                        (error pos ("unknown type '" ^ S.name tyName ^ "' in variable declaration");
-                        {venv=S.enter(venv, name, E.VarEntry{access=Tr.allocLocal(level)(!escape), ty=initTy}),
-                         tenv=tenv,
-                         exps=initExp::exps}))
+                        error pos ("unknown type '" ^ S.name tyName ^ "' in variable declaration"))
                    | NONE =>
                     if initTy = T.NIL then
-                      (error pos ("initializing non-record variable to nil: '" ^ S.name name ^ "'");
-                      {venv=S.enter(venv, name, E.VarEntry{access=Tr.allocLocal(level)(!escape), ty=initTy}),
-                       tenv=tenv,
-                       exps=initExp::exps})
+                      error pos ("initializing non-record variable to nil: '" ^ S.name name ^ "'")
                     else
-                      {venv=S.enter(venv, name, E.VarEntry{access=Tr.allocLocal(level)(!escape), ty=initTy}),
-                       tenv=tenv,
-                       exps=initExp::exps}
+                      ();
+                ret
             end
         | trdec(A.TypeDec tydecs) =
             let
@@ -796,11 +789,12 @@ struct
 
   fun transProg(exp) =
     let
+      val _ = FindEscape.findEscape(exp)
       val startLevel = Tr.newLevel{parent=Tr.outermost, name=Temp.namedLabel("tigermain"), formals=[]}
     in
       Tr.procEntryExit(startLevel,
-        getExp(
-          transExp(E.base_venv, E.base_tenv, exp, startLevel, noBreak)))
+                       getExp(transExp(E.base_venv, E.base_tenv, exp, startLevel, noBreak)),
+                       true)
     end
 
 end

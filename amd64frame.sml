@@ -9,8 +9,10 @@ struct
   val wordsize = 8
 
   val rsp = Temp.newTemp()
+  val rax = Temp.newTemp()
 
   val FP = rsp
+  val RA = rax
 
   fun newFrame{name, formals} =
     {name=name, formals=formals, locals=ref 0}
