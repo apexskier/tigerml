@@ -24,7 +24,6 @@ struct
 
   val error = ErrorMsg.error
   val errExpty = {exp=Tr.emptyEx, ty=T.UNIT}
-  val todoEx = Tr.todoEx
   val noBreak = Temp.newLabel()
 
   (* val reservedWords = ["self"] *) (* TODO: decide whether self should be a reserved word *)
@@ -161,7 +160,8 @@ struct
                            | _ => attrs
 
                       (* find a matching class attribute *)
-                      fun findField(s, ty) = s = id
+                      val fpos = ref 0
+                      fun findField(s, ty) = (fpos := !fpos + 1; s = id)
                       val matchedAttr = List.find findField(allAttrs)
                     in
                       (* verify attribute is a variable *)
@@ -169,7 +169,7 @@ struct
                         of SOME(s, attr) =>
                           (case attr
                             of T.CLASSVAR{ty, access} =>
-                              {exp=todoEx, ty=ty}
+                              {exp=Tr.simpleVar(access, level), ty=ty}
                              | T.METHOD _ =>
                               (error pos ("using class method as class var: '" ^ S.name id ^ "'");
                               errExpty))
@@ -475,7 +475,7 @@ struct
                     case List.find matchAttr attributes
                       of SOME(_, attr) =>
                         (case attr
-                          of T.METHOD{formals, result} =>
+                          of T.METHOD{formals, result, label} =>
                             let
                               val frmsLen = length formals
                               val argsLen = length args
@@ -493,7 +493,10 @@ struct
                                 errExpty)
                               else
                                 (ListPair.app matchTy(args, formals);
-                                {exp=todoEx, ty=result})
+                                {exp=Tr.callExp{name=label,
+                                                level=level,
+                                                funLevel=level,
+                                                args=(List.map getExp)(List.map trexp args)}, ty=result})
                             end
                            | T.CLASSVAR _ =>
                             (error pos ("calling a class variable: '" ^ S.name name ^ "'");
@@ -511,7 +514,14 @@ struct
               of SOME(typ) =>
                 (case typ
                   of T.CLASS(parent, attrs, unique) =>
-                    {exp=todoEx, ty=T.CLASS(parent, attrs, unique)}
+                    let
+                      fun translateAttr(s, T.CLASSVAR{ty, access}) =
+                            (SOME(access), NONE)
+                        | translateAttr(s, T.METHOD{formals, result, label}) =
+                            (NONE, SOME(label))
+                    in
+                      {exp=Tr.newExp(map translateAttr attrs, level), ty=typ}
+                    end
                    | _ =>
                     (error pos ("attempting to create new instance of non class type: '" ^ S.name name ^ "'");
                     errExpty))
@@ -677,8 +687,11 @@ struct
                         case attr
                           of T.CLASSVAR{ty, access} =>
                             S.enter(venv, s, E.VarEntry{access=access, ty=ty})
-                           | T.METHOD{formals, result} =>
-                            S.enter(venv, s, E.FunEntry{level=level, label=Temp.newLabel(), formals=formals, result=result})
+                           | T.METHOD{formals, result, label} =>
+                            S.enter(venv, s, E.FunEntry{level=level,
+                                                        label=label,
+                                                        formals=formals,
+                                                        result=result})
                     in
                       S.enter(foldl attrDec venv (getParentAttrs(parentTy, attrs)),
                               S.symbol "self",
@@ -719,12 +732,13 @@ struct
                                 fun checkParam{name, escape, typ, pos} =
                                   getTy(typ)
                                 val formals = map checkParam params
+                                val label = Temp.newLabel()
                               in
                                 (case result
                                   of SOME(tys, _) =>
-                                    (name, T.METHOD{formals=formals, result=getTy(tys)}) :: attrs
+                                    (name, T.METHOD{formals=formals, result=getTy(tys), label=label}) :: attrs
                                    | NONE =>
-                                    (name, T.METHOD{formals=formals, result=T.UNIT}) :: attrs)
+                                    (name, T.METHOD{formals=formals, result=T.UNIT, label=label}) :: attrs)
                               end
                           in
                             foldl getMethod attrs methoddecs

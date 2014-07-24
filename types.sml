@@ -11,6 +11,6 @@ struct
               | UNIT
               | CLASS of ty option * (Symbol.symbol * attribute) list * unique (* ty must be CLASS *)
 
-  and attribute = CLASSVAR of {ty: ty, access: Translate.access}
-                | METHOD of {formals: ty list, result: ty}
+  and attribute = CLASSVAR of {ty:ty, access:Translate.access}
+                | METHOD of {formals:ty list, result:ty, label:Temp.label}
 end

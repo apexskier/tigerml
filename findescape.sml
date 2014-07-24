@@ -7,7 +7,7 @@ struct
   structure A = Absyn
   structure S = Symbol
 
-  val error = ErrorMsg.error
+  val error = ErrorMsg.impossible
   val baseEnv = Symbol.empty
 
   type depth = int
@@ -20,12 +20,11 @@ struct
               of SOME(d', escape) =>
                 if !escape = false then
                   if d > d' then
-                    (escape := true;
-                    error pos ("findEscape: '" ^ S.name name ^ "' escapes"))
-                  else error pos ("findEscape: '" ^ S.name name ^ "' doesn't escape yet")
+                    escape := true
+                  else ()
                 else ()
                | NONE =>
-                error pos ("findEscape error: variable '" ^ S.name name ^ "' not found"))
+                error ("findEscape error: variable '" ^ S.name name ^ "' not found"))
         | trvar(A.FieldVar(var, fieldname, pos)) =
             trvar var
         | trvar(A.SubscriptVar(var, exp, pos)) =
@@ -83,7 +82,6 @@ struct
               escape := false;
               trexp lo;
               trexp hi;
-              error pos ("findEscape: '" ^ S.name var ^ "' declared (for loop)");
               traverseExp(env', d, body)
             end
         | trexp(A.BreakExp pos) =
@@ -112,8 +110,7 @@ struct
               fun trFun({name, params, result, body, pos}, env) =
                 let
                   fun trparam({name, escape, typ, pos}, env) =
-                    (error pos ("findEscape: '" ^ S.name name ^ "' declared (arg)");
-                    escape := false;
+                    (escape := false;
                     S.enter(env, name, (d+1, escape)))
                   val env' = foldl trparam env params
                 in
@@ -128,7 +125,6 @@ struct
               val env' = S.enter(env, name, (d, escape))
             in
               escape := false;
-              error pos ("findEscape: '" ^ S.name name ^ "' declared (var)");
               traverseExp(env, d, init);
               env'
             end

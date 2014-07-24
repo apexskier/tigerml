@@ -9,7 +9,6 @@ sig
   val outermost : level
   val fragments : Frame.frag list ref
   val emptyEx : exp
-  val todoEx : exp
 
   val newLevel : {parent:level, name:Temp.label, formals:bool list} -> level
   val formals : level -> Frame.access list
@@ -34,6 +33,7 @@ sig
   val ifThenExp : exp * exp -> exp
   val intExp : int -> exp
   val letExp : exp list * exp -> exp
+  val newExp : (access option * Temp.label option) list * level -> exp
   val recordExp : exp list -> exp
   val seqExp : exp list -> exp
   val simpleVar : access * level -> exp
@@ -53,6 +53,7 @@ struct
   structure F = Frame
   structure T = Tree
   structure E = ErrorMsg
+  val error = ErrorMsg.impossible
 
   datatype level = Outer
                  | Level of {frame:F.frame, parent:level} * unit ref
@@ -87,11 +88,6 @@ struct
 
   (* Utilities *)
   val emptyEx = Ex(T.CONST 0)
-  val todoEx = Ex(T.CONST 42)
-
-  fun error(msg) =
-    (print (msg ^ "\n");
-    raise E.Error)
 
   (* fun runtimeErr(msg) =
     let
@@ -175,19 +171,19 @@ struct
       Ex(T.BINOP(oper', unEx left, unEx right))
     end
 
-  fun arrayExp{size, init} =
+  and arrayExp{size, init} =
     Ex(F.externalCall("initArray", [unEx size, unEx init]))
 
-  fun assignExp(var, exp) =
+  and assignExp(var, exp) =
     Nx(T.MOVE(unEx var, unEx exp))
 
-  fun breakExp(lab) =
+  and breakExp(lab) =
     Nx(T.JUMP(T.NAME(lab), [lab]))
 
-  fun callExp{name, level, funLevel, args} =
+  and callExp{name, level, funLevel, args} =
     Ex(T.CALL(T.NAME name, staticLink(level, funLevel) :: List.map unEx args))
 
-  fun compareIntExp{oper, left, right} =
+  and compareIntExp{oper, left, right} =
     let
       val oper' =
         case oper
@@ -207,10 +203,10 @@ struct
       Cx(cx) (* TODO: should this produce one or zero? *)
     end
 
-  fun compareNil() =
+  and compareNil() =
     Ex(T.CONST 0) (* always false *)
 
-  fun compareStrExp{oper, left, right} =
+  and compareStrExp{oper, left, right} =
     let
       val oper' =
         case oper
@@ -227,13 +223,13 @@ struct
       Ex(F.externalCall(oper', [unEx left, unEx right]))
     end
 
-  fun compareRefEqExp(left, right) =
+  and compareRefEqExp(left, right) =
     Ex(F.externalCall("compareRef", [unEx left, unEx right]))
 
-  fun fieldVar{var, pos} =
+  and fieldVar{var, pos} =
     Ex(T.MEM(T.BINOP(T.PLUS, unEx var, T.CONST(pos * F.wordsize))))
 
-  fun forExp{var, body, lo, hi, fin} =
+  and forExp{var, body, lo, hi, fin} =
     let
       val bodyLab = Temp.newLabel()
       and finLab = fin
@@ -251,7 +247,7 @@ struct
              T.LABEL finLab])
     end
 
-  fun ifThenElseExp(test, th, el) =
+  and ifThenElseExp(test, th, el) =
     let
       val testCx = unCx test
       val thLab = Temp.newLabel()
@@ -289,7 +285,7 @@ struct
              error "illegal: incompatable then and else"
     end
 
-  fun ifThenExp(test, th) =
+  and ifThenExp(test, th) =
     let
       val testCx = unCx test
       val thLab = Temp.newLabel()
@@ -317,15 +313,39 @@ struct
     end
 
 
-  fun intExp(i) =
+  and intExp(i) =
     Ex(T.CONST i)
 
-  fun letExp(nil, body) =
+  and letExp(nil, body) =
         body
     | letExp(decs, body) =
         Ex(T.ESEQ(seq(List.map unNx decs), unEx body))
 
-  fun recordExp(fields) =
+  and newExp(attrs, level) =
+    let
+      val l = Temp.newTemp()
+      fun trattr(SOME(access), NONE) =
+            unEx(simpleVar(access, level))
+        | trattr(NONE, SOME(label)) =
+            T.NAME label
+        | trattr(_) =
+            error "weird attribute in new expression"
+      fun trattr'(v, i) =
+        T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP l, T.CONST(F.wordsize * i))), trattr(v))
+
+      fun initAttr(field, (tree, i)) =
+        (T.SEQ(trattr'(field, i), tree), (i + 1))
+
+      val size = length attrs * F.wordsize
+      val (attrsTree, _) = foldl initAttr (trattr'(hd attrs, 0), 1) (tl attrs)
+    in
+      Ex(T.ESEQ(T.SEQ(T.MOVE(T.TEMP l,
+                             F.externalCall("initSpace", [T.CONST size])),
+                      attrsTree),
+                T.TEMP l))
+    end
+
+  and recordExp(fields) =
     let
       val l = Temp.newTemp()
       fun insertField(field, i) =
@@ -341,14 +361,14 @@ struct
                 T.TEMP l))
     end
 
-  fun seqExp(nil) =
+  and seqExp(nil) =
         emptyEx
     | seqExp([exp]) =
         exp
     | seqExp(h::t) =
         Ex(T.ESEQ(unNx h, unEx(seqExp t)))
 
-  fun simpleVar(access, level) =
+  and simpleVar(access, level) =
     let
       val (acclev, fracc) = access
     in
@@ -359,7 +379,7 @@ struct
           error "illegal: variable access at outermost level"
     end
 
-  fun stringExp(s) =
+  and stringExp(s) =
     let
       val l = Temp.newLabel()
     in
@@ -367,7 +387,7 @@ struct
       Ex(T.NAME l)
     end
 
-  fun subscriptVar{var, loc} =
+  and subscriptVar{var, loc} =
     let
       (* TODO: bounds checking *)
       val errLab = Temp.newLabel()
@@ -392,14 +412,14 @@ struct
                 T.MEM(T.BINOP(T.PLUS, var', loc'))))
     end
 
-  fun varDec{init, level, access} =
+  and varDec{init, level, access} =
     let
       val place = simpleVar(access, level)
     in
       Nx(T.MOVE(unEx place, unEx init))
     end
 
-  fun whileExp{test, body, fin} =
+  and whileExp{test, body, fin} =
     let
       val testCx = unCx test
       val idx = Temp.newTemp()
