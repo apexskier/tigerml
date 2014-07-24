@@ -27,11 +27,13 @@ sig
   val compareNil : unit -> exp
   val compareStrExp : {oper:Absyn.oper, left:exp, right:exp} -> exp
   val compareRefEqExp : exp * exp -> exp
+  val fieldVar : {var:exp, pos:int} -> exp
   val forExp : {var:exp, body:exp, lo:exp, hi:exp, fin:Temp.label} -> exp
   val ifThenElseExp : exp * exp * exp -> exp
   val ifThenExp : exp * exp -> exp
   val intExp : int -> exp
   val letExp : exp list * exp -> exp
+  val recordExp : exp list -> exp
   val seqExp : exp list -> exp
   val simpleVar : access * level -> exp
   val stringExp : string -> exp
@@ -225,6 +227,9 @@ struct
   fun compareRefEqExp(left, right) =
     Ex(Frame.externalCall("compareRef", [unEx left, unEx right]))
 
+  fun fieldVar{var, pos} =
+    Ex(T.MEM(T.BINOP(T.PLUS, unEx var, T.CONST(pos * Frame.wordsize))))
+
   fun forExp{var, body, lo, hi, fin} =
     let
       val bodyLab = Temp.newLabel()
@@ -316,6 +321,22 @@ struct
         body
     | letExp(decs, body) =
         Ex(T.ESEQ(seq(List.map unNx decs), unEx body))
+
+  fun recordExp(fields) =
+    let
+      val l = Temp.newTemp()
+      fun insertField(field, i) =
+        T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP l, T.CONST(F.wordsize * i))), unEx field)
+      fun initField(field, (tree, i)) =
+        (T.SEQ(insertField(field, i), tree), (i + 1))
+      val size = length fields * F.wordsize
+      val (fieldsTree, _) = foldl initField (insertField(hd fields, 0), 1) (tl fields)
+    in
+      Ex(T.ESEQ(T.SEQ(T.MOVE(T.TEMP l,
+                             F.externalCall("initSpace", [T.CONST size])),
+                      fieldsTree),
+                T.TEMP l))
+    end
 
   fun seqExp(nil) =
         emptyEx

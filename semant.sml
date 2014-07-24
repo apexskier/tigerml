@@ -4,12 +4,12 @@ sig
 
   type venv = Env.enventry Symbol.table
   type tenv = Types.ty Symbol.table
-  type expty = {exp: Translate.exp, ty: Types.ty}
+  type expty = {exp:Translate.exp, ty:Types.ty}
 
   val transVar : venv * tenv * Absyn.var * Translate.level -> expty
   val transExp : venv * tenv * Absyn.exp * Translate.level * Temp.label -> expty
-  val transDec : venv * tenv * Absyn.dec * Translate.level -> {venv: venv, tenv: tenv}
-  val transDecs : venv * tenv * Absyn.dec list * Translate.level -> {venv: venv, tenv: tenv}
+  val transDec : venv * tenv * Absyn.dec * Translate.exp list * Translate.level -> {venv:venv, tenv:tenv, exps:Translate.exp list}
+  val transDecs : venv * tenv * Absyn.dec list * Translate.level -> {venv:venv, tenv:tenv, exps:Translate.exp list}
   val transTy : tenv * Absyn.ty -> Types.ty
 end
 
@@ -114,67 +114,73 @@ struct
                  (error pos ("unknown variable '" ^ S.name id ^ "'");
                  errExpty))
         | trvar(A.FieldVar(var, id, pos)) =
-            (case #ty(trvar var)
-              of T.RECORD(fields, _) =>
-                  (* look up field *)
-                  let
-                    fun matchField(field) =
-                      id = getSym field
-                  in
-                    case List.find matchField fields
-                      of SOME(_, ty) => {exp=todoEx, ty=ty}
-                       | NONE => (
-                          error pos ("record field '" ^ S.name id ^ "' not found");
-                          errExpty)
-                  end
-               | T.CLASS(parent, attrs, _) =>
-                  let
-                    (* generate list of attributes by recursing up inheritance *)
-                    fun getParent(T.CLASS(parent', pattrs, parentU), attrs) =
-                          let
-                            fun checkOverride(pAttrName, _) =
-                              let
-                                fun matchAttrs(s, _) = s = pAttrName
-                              in
-                                case List.find matchAttrs attrs
-                                  of SOME _ => false
-                                   | NONE => true
-                              end
-                          in
-                            case parent'
-                              of SOME p =>
-                                getParent(p, List.filter checkOverride(pattrs) @ attrs)
-                               | NONE =>
-                                attrs
-                          end
-                      | getParent(_, attrs) =
-                          (error pos "parent not a class";
-                          attrs)
-                    val allAttrs =
-                      case parent
-                        of SOME(p) => getParent(p, attrs)
-                         | _ => attrs
+            let
+              val {exp=varExp, ty=varTy} = trvar var
+            in
+              case varTy
+                of T.RECORD(fields, _) =>
+                    (* look up field *)
+                    let
+                      val fpos = ref 0
+                      fun matchField(field) =
+                        (fpos := !fpos + 1;
+                        id = getSym field)
+                    in
+                      case List.find matchField fields
+                        of SOME(s, ty) => {exp=Tr.fieldVar{var=varExp, pos=(!fpos)}, ty=ty}
+                         | NONE => (
+                            error pos ("record field '" ^ S.name id ^ "' not found");
+                            errExpty)
+                    end
+                 | T.CLASS(parent, attrs, _) =>
+                    let
+                      (* generate list of attributes by recursing up inheritance *)
+                      fun getParent(T.CLASS(parent', pattrs, parentU), attrs) =
+                            let
+                              fun checkOverride(pAttrName, _) =
+                                let
+                                  fun matchAttrs(s, _) = s = pAttrName
+                                in
+                                  case List.find matchAttrs attrs
+                                    of SOME _ => false
+                                     | NONE => true
+                                end
+                            in
+                              case parent'
+                                of SOME p =>
+                                  getParent(p, List.filter checkOverride(pattrs) @ attrs)
+                                 | NONE =>
+                                  attrs
+                            end
+                        | getParent(_, attrs) =
+                            (error pos "parent not a class";
+                            attrs)
+                      val allAttrs =
+                        case parent
+                          of SOME(p) => getParent(p, attrs)
+                           | _ => attrs
 
-                    (* find a matching class attribute *)
-                    fun findField(s, ty) = s = id
-                    val matchedAttr = List.find findField(allAttrs)
-                  in
-                    (* verify attribute is a variable *)
-                    case matchedAttr
-                      of SOME(s, attr) =>
-                        (case attr
-                          of T.CLASSVAR{ty, access} =>
-                            {exp=todoEx, ty=ty}
-                           | T.METHOD _ =>
-                            (error pos ("using class method as class var: '" ^ S.name id ^ "'");
-                            errExpty))
-                       | NONE =>
-                        (error pos ("class attribute (var) not found: '" ^ S.name id ^ "'");
-                        errExpty)
-                  end
-               | _ => (
-                  error pos ("accessing field '" ^ S.name id ^ "' on something not a record or class");
-                  errExpty))
+                      (* find a matching class attribute *)
+                      fun findField(s, ty) = s = id
+                      val matchedAttr = List.find findField(allAttrs)
+                    in
+                      (* verify attribute is a variable *)
+                      case matchedAttr
+                        of SOME(s, attr) =>
+                          (case attr
+                            of T.CLASSVAR{ty, access} =>
+                              {exp=todoEx, ty=ty}
+                             | T.METHOD _ =>
+                              (error pos ("using class method as class var: '" ^ S.name id ^ "'");
+                              errExpty))
+                         | NONE =>
+                          (error pos ("class attribute (var) not found: '" ^ S.name id ^ "'");
+                          errExpty)
+                    end
+                 | _ => (
+                    error pos ("accessing field '" ^ S.name id ^ "' on something not a record or class");
+                    errExpty)
+            end
         | trvar(A.SubscriptVar(var, exp, pos)) =
             let
               val {exp=varExp, ty=varTy} = trvar var
@@ -315,18 +321,18 @@ struct
                       fun matchField((sym', ty'), (sym, exp, pos)) =
                         let
                           val {exp=expExp, ty=expTy} = trexp exp
-                          val _ = tyEq(ty', expTy)
                         in
-                          if sym' <> sym then
+                          (if sym' <> sym then
                             error pos ("unexpected record field name: expected " ^ S.name sym' ^ ", found " ^ S.name sym)
                           else
                             if tyEq(ty', expTy) then ()
                             else
-                              error pos ("invalid type for record field '" ^ S.name sym' ^ "'")
+                              error pos ("invalid type for record field '" ^ S.name sym' ^ "'");
+                          expExp)
                         end
+                      val fieldExps = ListPair.map matchField(fields', fields)
                     in
-                      (ListPair.app matchField(fields', fields);
-                      {exp=todoEx, ty=T.RECORD(fields', unique)})
+                      {exp=Tr.recordExp(fieldExps), ty=T.RECORD(fields', unique)}
                     end
                 end
                | _ =>
@@ -431,10 +437,10 @@ struct
             errExpty)
         | trexp(A.LetExp{decs, body, pos}) =
             let
-              val {venv=venv', tenv=tenv'} = transDecs(venv, tenv, decs, level)
+              val {venv=venv', exps=exps, tenv=tenv'} = transDecs(venv, tenv, decs, level)
               val {exp=bodyexp, ty=ty} = transExp(venv', tenv', body, level, brkAlw)
             in
-              {exp=Tr.letExp([], bodyexp), ty=ty}
+              {exp=Tr.letExp(exps, bodyexp), ty=ty}
             end
         | trexp(A.ArrayExp{typ, size, init, pos}) =
             let val {exp=sizeExp, ty=sizeTy} = trexp size
@@ -518,13 +524,13 @@ struct
 
   and transDecs(venv, tenv, decs, level) =
     let
-      fun trdecs(dec, {venv, tenv}) =
-        transDec(venv, tenv, dec, level)
+      fun trdecs(dec, {venv, tenv, exps}) =
+        transDec(venv, tenv, dec, exps, level)
     in
-      foldl trdecs {venv=venv, tenv=tenv} decs
+      foldl trdecs {venv=venv, tenv=tenv, exps=nil} decs
     end
 
-  and transDec(venv, tenv, dec, level) =
+  and transDec(venv, tenv, dec, exps, level) =
     let
       fun trdec(A.FunctionDec fundecs) =
             let
@@ -582,7 +588,7 @@ struct
 
               val _ = app checkFunc funcList
             in
-              {tenv=tenv, venv=recEnv}
+              {venv=recEnv, tenv=tenv, exps=exps}
             end
         | trdec(A.VarDec{name, escape, typ, init, pos}) =
             let
@@ -600,23 +606,31 @@ struct
                       of SOME(ty) =>
                         (if tyEq(initTy, ty) then ()
                         else error pos ("variable type '" ^ S.name tyName ^ "' doesn't match initialization");
-                        {venv=S.enter(venv, name, E.VarEntry{access=Tr.allocLocal(level)(!escape), ty=ty}), tenv=tenv})
+                        {venv=S.enter(venv, name, E.VarEntry{access=Tr.allocLocal(level)(!escape), ty=ty}),
+                         tenv=tenv,
+                         exps=initExp::exps})
                        | NONE =>
                         (error pos ("unknown type '" ^ S.name tyName ^ "' in variable declaration");
-                        {venv=S.enter(venv, name, E.VarEntry{access=Tr.allocLocal(level)(!escape), ty=initTy}), tenv=tenv}))
+                        {venv=S.enter(venv, name, E.VarEntry{access=Tr.allocLocal(level)(!escape), ty=initTy}),
+                         tenv=tenv,
+                         exps=initExp::exps}))
                    | NONE =>
                     if initTy = T.NIL then
                       (error pos ("initializing non-record variable to nil: '" ^ S.name name ^ "'");
-                      {venv=S.enter(venv, name, E.VarEntry{access=Tr.allocLocal(level)(!escape), ty=initTy}), tenv=tenv})
+                      {venv=S.enter(venv, name, E.VarEntry{access=Tr.allocLocal(level)(!escape), ty=initTy}),
+                       tenv=tenv,
+                       exps=initExp::exps})
                     else
-                      {venv=S.enter(venv, name, E.VarEntry{access=Tr.allocLocal(level)(!escape), ty=initTy}), tenv=tenv}
+                      {venv=S.enter(venv, name, E.VarEntry{access=Tr.allocLocal(level)(!escape), ty=initTy}),
+                       tenv=tenv,
+                       exps=initExp::exps}
             end
         | trdec(A.TypeDec tydecs) =
             let
               fun crInitEnv({name, ty, pos}, tenv) =
                 S.enter(tenv, name, T.NIL)
               val initEnv = foldl crInitEnv tenv tydecs
-              fun trtydec({name, ty, pos}, {venv, tenv}) =
+              fun trtydec({name, ty, pos}, {venv, tenv, exps}) =
                 let
                   fun testTy({name=name', ty, pos}) =
                     name = name'
@@ -628,10 +642,12 @@ struct
 
                   val newTy = transTy(initEnv, ty)
                 in
-                  {venv=venv, tenv=S.enter(tenv, name, newTy)}
+                  {venv=venv,
+                   tenv=S.enter(tenv, name, newTy),
+                   exps=exps}
                 end
             in
-              foldl trtydec {venv=venv, tenv=tenv} tydecs
+              foldl trtydec {venv=venv, tenv=tenv, exps=exps} tydecs
             end
         | trdec(A.ClassDec{name, parent, fields, pos}) =
             (* 1. get all fields (symbol * attribute) and make sure types in attributes exist, typechecking var decs fully
@@ -688,7 +704,7 @@ struct
                             let
                               val venv' = genrEnv(attrs)
                               val _ =
-                                transDec(venv', tenv, A.VarDec{name=name, escape=escape, typ=typ, init=init, pos=pos}, level)
+                                transDec(venv', tenv, A.VarDec{name=name, escape=escape, typ=typ, init=init, pos=pos}, exps, level)
                               val ty =
                                 case typ
                                   of SOME(tys, _) =>
@@ -735,15 +751,15 @@ struct
                       of A.ClassVarDec{name, escape, typ, init, pos} =>
                         ()
                        | A.MethodDec methoddecs =>
-                        (transDec(methodEnv, tenv, A.FunctionDec methoddecs, level); ())
+                        (transDec(methodEnv, tenv, A.FunctionDec methoddecs, exps, level); ())
 
                   val _ = app transField fields
                 in
-                  {venv=venv, tenv=S.enter(tenv, name, T.CLASS(SOME(parentTy), allAttrs, ref ()))}
+                  {venv=venv, tenv=S.enter(tenv, name, T.CLASS(SOME(parentTy), allAttrs, ref ())), exps=exps}
                 end
                | NONE =>
                 (error pos ("parent type not found: '" ^ S.name parent ^ "'");
-                {venv=venv, tenv=tenv}))
+                {venv=venv, tenv=tenv, exps=exps}))
     in
       trdec dec
     end
