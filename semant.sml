@@ -84,10 +84,10 @@ struct
               of T.RECORD(_, u') => u = u'
                | T.NIL => true
                | _ => false)
-           | T.CLASS(parent, u) =>
+           | T.CLASS(_, parent, u) =>
             (case parent
               of SOME(parent) =>
-                tyEq(B, parent)
+                tyEq(parent, B)
                | NONE => false)
            | _ => false
     end
@@ -134,11 +134,37 @@ struct
                             error pos ("record field '" ^ S.name id ^ "' not found");
                             errExpty)
                     end
-                 | T.CLASS(s, u) => (* TODO: refactor *)
+                 | T.CLASS(s, t, u) =>
                     (* generate list of attributes by recursing up inheritance *)
                     (* find a matching class attribute *)
                     (* verify attribute is a variable *)
-                    errExpty
+                    let
+                      val class as E.ClassEntry{parent, attributes} = valOf(S.look(cenv, s))
+                      fun matchAttr(E.ClassEntry{parent, attributes}) =
+                        let
+                          fun eq(attrname, enventry) =
+                            attrname = id
+                        in
+                          case parent
+                            of SOME(parent') =>
+                              (case List.find eq attributes
+                                of m as SOME(symbol, entry) => SOME(entry)
+                                 | NONE => matchAttr parent')
+                             | NONE =>
+                              (error pos ("class attribute '" ^ S.name id ^ "' not found");
+                              NONE)
+                        end
+                      val matchedAttr = matchAttr(class)
+                    in
+                      case matchedAttr
+                        of SOME(E.VarEntry{access, ty}) => {exp=Tr.simpleVar(access, level), ty=actTy ty}
+                         | SOME(E.FunEntry _) =>
+                          (error pos ("accessing class method '" ^ S.name id ^ "' as class variable");
+                          errExpty)
+                         | NONE =>
+                          (error pos ("class variable '" ^ S.name id ^"' not found");
+                          errExpty)
+                    end
                  | _ => (
                     error pos ("accessing field '" ^ S.name id ^ "' on something not a record or class");
                     errExpty)
@@ -236,7 +262,7 @@ struct
                     {exp=Tr.compareRefEqExp(leftExp, rightExp), ty=T.INT}
                    | T.NIL =>
                     {exp=Tr.compareNil(), ty=T.INT}
-                   | T.CLASS(_, un) =>
+                   | T.CLASS(_, _, un) =>
                     {exp=Tr.compareRefEqExp(leftExp, rightExp), ty=T.INT}
                    | _ =>
                     (error pos "equality operands cannot be UNIT or NAME";
@@ -392,11 +418,11 @@ struct
               {exp=Tr.forExp{var=Tr.simpleVar(idxAcc, level), body=bodyExp, lo=loExp, hi=hiExp, fin=finLab}, ty=T.UNIT}
             end
         | trexp(A.BreakExp pos) =
-          if brkAlw <> noBreak then
-            {exp=Tr.breakExp(brkAlw), ty=T.UNIT}
-          else
-            (error pos "break used outside of loop";
-            errExpty)
+            if brkAlw <> noBreak then
+              {exp=Tr.breakExp(brkAlw), ty=T.UNIT}
+            else
+              (error pos "break used outside of loop";
+              errExpty)
         | trexp(A.LetExp{decs, body, pos}) =
             let
               val {venv=venv', tenv=tenv', cenv=cenv', exps=exps} = transDecs(venv, tenv, cenv, decs, level)
@@ -428,24 +454,90 @@ struct
               val {exp=varExp, ty} = transVar(venv, tenv, cenv, var, level)
             in
               case ty
-                of T.CLASS(parent, _) => (* TODO: refactor *)
-                  errExpty
+                of T.CLASS(s, parent, _) =>
+                  (* generate list of attributes by recursing up inheritance *)
+                  (* find a matching class attribute *)
+                  (* verify attribute is a method *)
+                  let
+                    val class as E.ClassEntry{parent, attributes} =
+                      case S.look(cenv, s)
+                        of SOME(class) => class
+                         | NONE =>
+                          ErrorMsg.impossible ("class '" ^ S.name s ^ "' of variable not found")
+                    fun matchAttr(E.ClassEntry{parent, attributes}) =
+                      let
+                        fun eq(attrname, enventry) =
+                          attrname = name
+                      in
+                        case parent
+                          of SOME(parent') =>
+                            (case List.find eq attributes
+                              of m as SOME(symbol, entry) => SOME(entry)
+                               | NONE => matchAttr parent')
+                           | NONE =>
+                            (error pos ("class attribute '" ^ S.name name ^ "' not found");
+                            NONE)
+                      end
+                    val matchedAttr = matchAttr(class)
+                  in
+                    case matchedAttr
+                      of SOME(E.FunEntry{level=funlevel, label, formals, result=resultTy}) =>
+                        {exp=Tr.callExp{name=label,
+                                        level=level,
+                                        funLevel=funlevel,
+                                        args=(List.map getExp)(List.map trexp args)}, ty=resultTy}
+                       | SOME(E.VarEntry _) =>
+                        (error pos ("accessing class method '" ^ S.name name ^ "' as class variable");
+                        errExpty)
+                       | NONE =>
+                        (error pos ("class method '" ^ S.name name ^"' not found");
+                        errExpty)
+                  end
                  | _ =>
                   (error pos ("attempting to call a method on something not a class instance: '" ^ S.name name ^ "'");
                   errExpty)
             end
         | trexp(A.NewExp(name, pos)) =
-            (case S.look(tenv, name)
-              of SOME(typ) =>
-                (case typ
-                  of T.CLASS(parent, unique) => (* TODO: refactor *)
-                    errExpty
+            case S.look(tenv, name)
+              of SOME(ty) =>
+                (case ty
+                  of T.CLASS(s, parent, unique) => (* TODO: refactor *)
+                    let
+                      val class =
+                        case S.look(cenv, name)
+                          of SOME(class) => class
+                           | NONE =>
+                            (error pos ("class '" ^ S.name name ^ "' not found");
+                            valOf(S.look(cenv, S.symbol "Object")))
+
+                      fun getAttrs(class as E.ClassEntry{parent=pclass, attributes=thisAttrs}, baseAttrs) =
+                        case pclass
+                          of NONE => baseAttrs
+                           | SOME(pclass') =>
+                            let
+                              fun insertAttr(attr as (attrname:S.symbol, enventry:E.enventry), attrs) =
+                                let
+                                  fun eq(name, enventry) =
+                                    attrname = name
+                                in
+                                  if List.exists eq attrs then
+                                    attrs
+                                  else
+                                    attr :: attrs
+                                end
+                            in
+                              getAttrs(pclass', foldl insertAttr baseAttrs thisAttrs)
+                            end
+                      val attrs = getAttrs(class, nil)
+                    in
+                      {exp=Tr.emptyEx, ty=ty}
+                    end
                    | _ =>
                     (error pos ("attempting to create new instance of non class type: '" ^ S.name name ^ "'");
                     errExpty))
                | NONE =>
                 (error pos ("class not found: '" ^ S.name name ^ "'");
-                errExpty))
+                errExpty)
     in
       trexp exp
     end
@@ -537,12 +629,12 @@ struct
                     (case S.look(tenv, tyName)
                       of SOME(ty) =>
                         if tyEq(initTy, ty) then ()
-                        else error pos ("variable type '" ^ S.name tyName ^ "' doesn't match initialization")
+                        else error pos ("variable '" ^ S.name name ^ "' type '" ^ S.name tyName ^ "' doesn't match initialization")
                        | NONE =>
-                        error pos ("unknown type '" ^ S.name tyName ^ "' in variable declaration"))
+                        error pos ("unknown type '" ^ S.name tyName ^ "' in variable '" ^ S.name name ^ "' declaration"))
                    | NONE =>
                     if initTy = T.NIL then
-                      error pos ("initializing non-record variable to nil: '" ^ S.name name ^ "'")
+                      error pos ("initializing non-record variable '" ^ S.name name ^ "' to nil: '" ^ S.name name ^ "'")
                     else
                       ();
                 ret
@@ -578,34 +670,68 @@ struct
                3. type check method declarations, with a venv augmented with attributes and self *)
             let
               val classTy =
-                T.CLASS(S.look(tenv, parent), ref ())
+                T.CLASS(name, S.look(tenv, parent), ref ())
               val selfAccess = Tr.allocLocal(level)(true)
+              val objectClass = valOf(S.look(cenv, S.symbol "Object"))
+              val parentClassEntry =
+                case S.look(cenv, parent)
+                  of SOME parent' => parent'
+                   | NONE =>
+                    (error pos ("parent class '" ^ S.name parent ^ "' not found");
+                    objectClass)
+
+              fun getParentEnv(pclass as E.ClassEntry{parent=pclass', attributes=pattrs}, venv:venv) =
+                case pclass'
+                  of NONE => venv
+                   | SOME(pclass') =>
+                    let
+                      val venv' = getParentEnv(pclass', venv)
+                      fun insertAttr((attrname:S.symbol, enventry:E.enventry), venv) =
+                        S.enter(venv, attrname, enventry)
+                    in
+                      foldl insertAttr venv' pattrs
+                    end
+              val parentVenv = getParentEnv(parentClassEntry, venv)
+
               val classTenv = S.enter(tenv, name, classTy)
-              val classVenv = S.enter(venv, S.symbol "self", E.VarEntry{access=selfAccess, ty=classTy})
-              val {venv=venv', tenv=tenv', cenv=cenv', exps=exps'} = transDecs(classVenv, classTenv, cenv, attributes, level)
+              val classVenv = S.enter(parentVenv, S.symbol "self", E.VarEntry{access=selfAccess, ty=classTy})
+
+              val envclass =
+                E.ClassEntry{parent=SOME(parentClassEntry), attributes=nil}
+              val classCenv = S.enter(cenv, name, envclass)
+
+              val {venv=venv', tenv=tenv', cenv=cenv', exps=exps'} =
+                transDecs(classVenv, classTenv, classCenv, attributes, level)
+
               fun lookUpAttr(A.FunctionDec fundecs, attrs) =
                     let
                       fun lookUpFundec({name, params, result, body, pos}) =
-                        valOf(S.look(venv', name))
+                        (name, valOf(S.look(venv', name)))
                     in
                       map lookUpFundec(fundecs) @ attrs
                     end
                 | lookUpAttr(A.VarDec{name, escape, typ, init, pos}, attrs) =
-                    valOf(S.look(venv', name)) :: attrs
+                    (name, valOf(S.look(venv', name))) :: attrs
                 | lookUpAttr(_) = ErrorMsg.impossible "ClassDec or TypeDec in class attributes"
               val attrs = foldl lookUpAttr nil attributes
-              val envclass =
-                case S.look(cenv, parent)
-                  of parent' as SOME(E.ClassEntry{parent=parentClass, attributes=pAttrs}) =>
-                    E.ClassEntry{parent=parent', attributes=attrs}
-                   | NONE =>
-                    (error pos ("parent class '" ^ S.name parent ^ "' not found");
-                    E.ClassEntry{parent=S.look(cenv, S.symbol "Object"), attributes=attrs})
+              (* DEBUG:
+              val _ =
+                let
+                  val i = ref 0
+                  fun printattr(s, e) =
+                    (i := !i + 1;
+                    print ("'" ^ S.name name ^ "' attribute " ^ Int.toString(!i) ^ ": '" ^ S.name s ^ "'\n"))
+                in
+                  app printattr attrs
+                end *)
+
+              val envclass' =
+                E.ClassEntry{parent=SOME(parentClassEntry), attributes=attrs}
             in
                {venv=venv,
                 tenv=S.enter(tenv, name, classTy),
-                cenv=S.enter(cenv, name, envclass),
-                exps=exps}
+                cenv=S.enter(cenv, name, envclass'),
+                exps=exps'}
             end
     in
       trdec dec

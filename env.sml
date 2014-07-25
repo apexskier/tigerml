@@ -8,7 +8,7 @@ sig
                                    formals: ty list,
                                    result: ty}
   datatype classentry = ClassEntry of {parent: classentry option,
-                                       attributes: enventry list}
+                                       attributes: (Symbol.symbol * enventry) list}
   val base_tenv : ty Symbol.table
   val base_venv : enventry Symbol.table
   val base_cenv : classentry Symbol.table
@@ -28,15 +28,12 @@ struct
                                    formals: ty list,
                                    result: ty}
   datatype classentry = ClassEntry of {parent: classentry option,
-                                       attributes: enventry list}
-
-  fun enter ((symbol, entry), env) =
-    Symbol.enter(env, symbol, entry)
+                                       attributes: (S.symbol * enventry) list}
 
   val base_tenv = S.enter(S.enter(S.enter(S.empty,
                     S.symbol("int"), T.INT),
                     S.symbol("string"), T.STRING),
-                    S.symbol("Object"), T.CLASS(NONE, ref ()))
+                    S.symbol("Object"), T.CLASS(S.symbol("Object"), NONE, ref ()))
 
   val base_venv = S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.empty,
                     S.symbol("print"),    FunEntry{level=Tr.outermost,

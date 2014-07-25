@@ -9,5 +9,5 @@ struct
               | ARRAY of ty * unique
               | NAME of Symbol.symbol * ty option ref
               | UNIT
-              | CLASS of ty option * unique
+              | CLASS of Symbol.symbol * ty option * unique
 end
