@@ -312,7 +312,6 @@ struct
                 T.LABEL finLab])
     end
 
-
   and intExp(i) =
     Ex(T.CONST i)
 

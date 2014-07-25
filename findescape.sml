@@ -130,8 +130,8 @@ struct
             end
         | trdec(A.TypeDec decs) =
             env
-        | trdec(A.ClassDec{name, parent, fields, pos}) =
-            (* let
+        | trdec(A.ClassDec{name, parent, attributes, pos}) =
+            (* TODO: let
               fun trfield(A.ClassVarDec{name, escape, typ, init, pos}) =
                     trdec(A.VarDec{name, escape, typ, init, pos})
                 | trfield(A.MethodDec fundecs) =

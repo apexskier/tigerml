@@ -7,8 +7,11 @@ sig
                                    label: Temp.label,
                                    formals: ty list,
                                    result: ty}
+  datatype classentry = ClassEntry of {parent: classentry option,
+                                       attributes: enventry list}
   val base_tenv : ty Symbol.table
   val base_venv : enventry Symbol.table
+  val base_cenv : classentry Symbol.table
 end
 
 structure Env : ENV =
@@ -24,6 +27,8 @@ struct
                                    label: Temp.label,
                                    formals: ty list,
                                    result: ty}
+  datatype classentry = ClassEntry of {parent: classentry option,
+                                       attributes: enventry list}
 
   fun enter ((symbol, entry), env) =
     Symbol.enter(env, symbol, entry)
@@ -31,7 +36,7 @@ struct
   val base_tenv = S.enter(S.enter(S.enter(S.empty,
                     S.symbol("int"), T.INT),
                     S.symbol("string"), T.STRING),
-                    S.symbol("Object"), T.CLASS(NONE, nil, ref ()))
+                    S.symbol("Object"), T.CLASS(NONE, ref ()))
 
   val base_venv = S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.empty,
                     S.symbol("print"),    FunEntry{level=Tr.outermost,
@@ -74,4 +79,7 @@ struct
                                                    label=Temp.namedLabel "exit",
                                                    formals=[T.INT],
                                                    result=T.UNIT})
+
+  val base_cenv = S.enter(S.empty,
+                    S.symbol("Object"), ClassEntry{parent=NONE, attributes=nil})
 end

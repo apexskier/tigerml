@@ -114,10 +114,10 @@ struct
                           ty(t,d+1); say ")")
         in indent d; say "TypeDec["; dolist d tdec l; say "]"
            end
-      | dec(A.ClassDec{name,parent,fields,pos}, d) =
+      | dec(A.ClassDec{name,parent,attributes,pos}, d) =
           (indent d; say "ClassDec(";
           say(Symbol.name name); say ","; say(Symbol.name parent); say ",";
-          say "["; dolist d classfield fields; say "]";
+          say "["; dolist d dec attributes; say "]";
           say ")")
 
     and ty(A.NameTy(s,p), d) = (indent d; say "NameTy("; say(Symbol.name s);
@@ -131,26 +131,6 @@ struct
           end
       | ty(A.ArrayTy(s,p),d) = (indent d; say "ArrayTy("; say(Symbol.name s);
                     say ")")
-
-    and classfield(A.ClassVarDec{name,escape,typ,init,pos},d) =
-         (indent d; say "ClassVarDec("; say(Symbol.name name); say ",";
-          say(Bool.toString (!escape)); say ",";
-          case typ of NONE => say "NONE"
-                | SOME(s,p)=> (say "SOME("; say(Symbol.name s); say ")");
-              sayln ","; exp(init,d+1); say ")")
-      | classfield(A.MethodDec l, d) =
-          let fun field({name,escape,typ,pos},d) =
-              (indent d; say "("; say(Symbol.name name);
-               say ","; say(Bool.toString(!escape));
-               say ","; say(Symbol.name typ); say ")")
-          fun f({name,params,result,body,pos},d) =
-             (indent d; say "("; say (Symbol.name name); say ",[";
-              dolist d field params; sayln "],";
-              case result of NONE => say "NONE"
-               | SOME(s,_) => (say "SOME("; say(Symbol.name s); say ")");
-              sayln ","; exp(body,d+1); say ")")
-           in indent d; say "MethodDec["; dolist d f l; say "]"
-          end
 
    in  exp(e0,0); sayln ""; TextIO.flushOut outstream
   end
