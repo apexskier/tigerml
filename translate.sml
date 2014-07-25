@@ -151,7 +151,7 @@ struct
         if levEq(defLevel, curLevel) then
           T.TEMP F.FP
         else
-          T.MEM(T.BINOP(T.PLUS, T.CONST 0, staticLink(defLevel, parent)))
+          T.MEM(T.BINOP(T.PLUS, T.CONST 0, staticLink(defLevel, parent))) (* TODO: why am i adding const 0 everytime *)
     | staticLink(_, Outer) = T.TEMP F.FP
 
   (* Translation *)

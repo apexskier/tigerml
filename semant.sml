@@ -709,12 +709,10 @@ struct
                         of A.ClassVarDec{name, escape, typ, init, pos} =>
                             let
                               val venv' = genrEnv(attrs)
-                              val _ =
-                                transDec(venv', tenv, A.VarDec{name=name, escape=escape, typ=typ, init=init, pos=pos}, exps, level)
                               val ty =
                                 case typ
                                   of SOME(tys, _) =>
-                                    (print ("----- " ^ S.name tys ^ "\n");
+                                    (transDec(venv', tenv, A.VarDec{name=name, escape=escape, typ=typ, init=init, pos=pos}, exps, level);
                                     getTy(tys))
                                    | NONE =>
                                     let
@@ -753,16 +751,21 @@ struct
 
                   val methodEnv = genrEnv(allAttrs)
 
-                  fun transField(field) =
+                  fun transField(field, exps) =
                     case field
                       of A.ClassVarDec{name, escape, typ, init, pos} =>
-                        ()
+                          exps
                        | A.MethodDec methoddecs =>
-                        (transDec(methodEnv, tenv, A.FunctionDec methoddecs, exps, level); ())
+                        let
+                          val {venv=_, tenv=_, exps=exps'} =
+                            transDec(methodEnv, tenv, A.FunctionDec methoddecs, exps, level)
+                        in
+                          exps'
+                        end
 
-                  val _ = app transField fields
+                  val exps' = foldl transField exps fields
                 in
-                  {venv=venv, tenv=S.enter(tenv, name, T.CLASS(SOME(parentTy), allAttrs, ref ())), exps=exps}
+                  {venv=venv, tenv=S.enter(tenv, name, T.CLASS(SOME(parentTy), allAttrs, ref ())), exps=exps'}
                 end
                | NONE =>
                 (error pos ("parent type not found: '" ^ S.name parent ^ "'");
