@@ -33,7 +33,8 @@ sig
   val ifThenExp : exp * exp -> exp
   val intExp : int -> exp
   val letExp : exp list * exp -> exp
-  val newExp : (access option * Temp.label option) list * level -> exp
+  val newExp : {attrs:exp list, level:level} -> exp
+  val newMethod : {name:Temp.label, level:level, funLevel:level} -> exp
   val recordExp : exp list -> exp
   val seqExp : exp list -> exp
   val simpleVar : access * level -> exp
@@ -318,31 +319,21 @@ struct
   and letExp(nil, body) =
         body
     | letExp(decs, body) =
-        Ex(T.ESEQ(seq(List.map unNx decs), unEx body))
+        let
+          (* fun testprint(dec) =
+            (print "****************\n";
+            Printtree.printtree(TextIO.stdOut, unNx dec);
+            print "----------------\n")
+          val _ = app testprint(decs) *)
+        in
+          Ex(T.ESEQ(seq(List.map unNx decs), unEx body))
+        end
 
-  and newExp(attrs, level) =
-    let
-      val l = Temp.newTemp()
-      fun trattr(SOME(access), NONE) =
-            unEx(simpleVar(access, level))
-        | trattr(NONE, SOME(label)) =
-            T.NAME label
-        | trattr(_) =
-            error "weird attribute in new expression"
-      fun trattr'(v, i) =
-        T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP l, T.CONST(F.wordsize * i))), trattr(v))
+  and newExp{attrs, level} =
+    recordExp(attrs)
 
-      fun initAttr(field, (tree, i)) =
-        (T.SEQ(trattr'(field, i), tree), (i + 1))
-
-      val size = length attrs * F.wordsize
-      val (attrsTree, _) = foldl initAttr (trattr'(hd attrs, 0), 1) (tl attrs)
-    in
-      Ex(T.ESEQ(T.SEQ(T.MOVE(T.TEMP l,
-                             F.externalCall("initSpace", [T.CONST size])),
-                      attrsTree),
-                T.TEMP l))
-    end
+  and newMethod{name, level, funLevel} =
+    Ex(T.NAME name)
 
   and recordExp(fields) =
     let

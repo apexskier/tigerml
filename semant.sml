@@ -24,6 +24,8 @@ struct
   structure Tr = Translate
   structure S = Symbol
 
+  val count = ref 0 (* DEBUG *)
+
   val error = ErrorMsg.error
   val errExpty = {exp=Tr.emptyEx, ty=T.UNIT}
   val noBreak = Temp.newLabel()
@@ -425,10 +427,10 @@ struct
               errExpty)
         | trexp(A.LetExp{decs, body, pos}) =
             let
-              val {venv=venv', tenv=tenv', cenv=cenv', exps=exps} = transDecs(venv, tenv, cenv, decs, level)
+              val {venv=venv', tenv=tenv', cenv=cenv', exps=exps'} = transDecs(venv, tenv, cenv, decs, level)
               val {exp=bodyexp, ty=ty} = transExp(venv', tenv', cenv', body, level, brkAlw)
             in
-              {exp=Tr.letExp(exps, bodyexp), ty=ty}
+              {exp=Tr.letExp(exps', bodyexp), ty=ty}
             end
         | trexp(A.ArrayExp{typ, size, init, pos}) =
             let val {exp=sizeExp, ty=sizeTy} = trexp size
@@ -501,7 +503,7 @@ struct
             case S.look(tenv, name)
               of SOME(ty) =>
                 (case ty
-                  of T.CLASS(s, parent, unique) => (* TODO: refactor *)
+                  of T.CLASS(s, parent, unique) =>
                     let
                       val class =
                         case S.look(cenv, name)
@@ -517,20 +519,31 @@ struct
                             let
                               fun insertAttr(attr as (attrname:S.symbol, enventry:E.enventry), attrs) =
                                 let
-                                  fun eq(name, enventry) =
+                                  fun eq(name, _) =
                                     attrname = name
                                 in
                                   if List.exists eq attrs then
                                     attrs
                                   else
-                                    attr :: attrs
+                                    let
+                                      val attr' =
+                                        case enventry
+                                          of E.VarEntry{access, ty} =>
+                                            (name, Tr.simpleVar(access, level))
+                                           | E.FunEntry{level=funlevel, label, formals, result} =>
+                                            (name, Tr.newMethod{name=label, level=level, funLevel=funlevel})
+                                    in
+                                      attr' :: attrs
+                                    end
                                 end
                             in
                               getAttrs(pclass', foldl insertAttr baseAttrs thisAttrs)
                             end
                       val attrs = getAttrs(class, nil)
+                      fun getEntry(s, entry) = entry
+                      val attrs' = map getEntry attrs
                     in
-                      {exp=Tr.emptyEx, ty=ty}
+                      {exp=Tr.newExp{attrs=attrs', level=level}, ty=ty}
                     end
                    | _ =>
                     (error pos ("attempting to create new instance of non class type: '" ^ S.name name ^ "'");
@@ -544,8 +557,8 @@ struct
 
   and transDecs(venv, tenv, cenv, decs, level) =
     let
-      fun trdecs(dec, {venv, tenv, cenv, exps}) =
-        transDec(venv, tenv, cenv, dec, exps, level)
+      fun trdecs(dec, {venv=venv', tenv=tenv', cenv=cenv', exps=exps'}) =
+        transDec(venv', tenv', cenv', dec, exps', level)
     in
       foldl trdecs {venv=venv, tenv=tenv, cenv=cenv, exps=nil} decs
     end
@@ -618,7 +631,7 @@ struct
               val ret = {venv=S.enter(venv, name, E.VarEntry{access=access, ty=initTy}),
                          tenv=tenv,
                          cenv=cenv,
-                         exps=initExp'::exps}
+                         exps=exps @ [initExp']}
             in
               (* if List.exists eq reservedWords then
                 (error pos ("'" ^ S.name name ^ "' is a reserved word");
@@ -731,7 +744,7 @@ struct
                {venv=venv,
                 tenv=S.enter(tenv, name, classTy),
                 cenv=S.enter(cenv, name, envclass'),
-                exps=exps'}
+                exps=exps @ exps'}
             end
     in
       trdec dec

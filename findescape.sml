@@ -131,15 +131,7 @@ struct
         | trdec(A.TypeDec decs) =
             env
         | trdec(A.ClassDec{name, parent, attributes, pos}) =
-            (* TODO: let
-              fun trfield(A.ClassVarDec{name, escape, typ, init, pos}) =
-                    trdec(A.VarDec{name, escape, typ, init, pos})
-                | trfield(A.MethodDec fundecs) =
-                    trdec(A.FunctionDec fundecs)
-            in
-              app trfield fields
-            end *)
-            env
+            traverseDecs(env, d, attributes)
     in
       trdec s
     end
