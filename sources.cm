@@ -3,6 +3,7 @@ Group is
 Run.sml
 
 absyn.sml
+canon.sml
 env.sml
 errormsg.sml
 findescape.sml
