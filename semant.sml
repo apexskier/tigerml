@@ -529,19 +529,30 @@ struct
                                       val attr' =
                                         case enventry
                                           of E.VarEntry{access, ty} =>
-                                            (name, Tr.simpleVar(access, level))
+                                            (attrname, Tr.simpleVar(access, level))
                                            | E.FunEntry{level=funlevel, label, formals, result} =>
-                                            (name, Tr.newMethod{name=label, level=level, funLevel=funlevel})
+                                            (attrname, Tr.newMethod{name=label, level=level, funLevel=funlevel})
                                     in
                                       attr' :: attrs
                                     end
                                 end
                             in
+                              (* foldl insertAttr (getAttrs(pclass', baseAttrs)) thisAttrs *)
                               getAttrs(pclass', foldl insertAttr baseAttrs thisAttrs)
                             end
                       val attrs = getAttrs(class, nil)
-                      fun getEntry(s, entry) = entry
-                      val attrs' = map getEntry attrs
+                      (* DEBUG:
+                      val _ =
+                        let
+                          val i = ref 0
+                          fun printattr(s, e) =
+                            (i := !i + 1;
+                            print ("'" ^ S.name name ^ "' attribute " ^ Int.toString(!i) ^ ": '" ^ S.name s ^ "'\n"))
+                        in
+                          app printattr attrs
+                        end *)
+                      fun getExp(s, exp) = exp
+                      val attrs' = map getExp attrs
                     in
                       {exp=Tr.newExp{attrs=attrs', level=level}, ty=ty}
                     end
@@ -569,7 +580,7 @@ struct
             let
               fun basicFunDec({name, params, result, body, pos}, (funcs, venv, levels)) =
                 let
-                  val label = (* Temp.newLabel() *)Temp.namedLabel(Symbol.name name)
+                  val label = Temp.newLabel()(* DEBUG: Temp.namedLabel(Symbol.name name) *)
                   val newLevel = Tr.newLevel{parent=level, name=label, formals=map (fn(_)=>true) params}
                   val resultTy =
                     case result
@@ -633,6 +644,10 @@ struct
                          cenv=cenv,
                          exps=exps @ [initExp']}
             in
+              (* if this is a class variable declaration, this needs to point
+              * to a field off of self, rather than to a real locally allocated
+              * variable *)
+
               (* if List.exists eq reservedWords then
                 (error pos ("'" ^ S.name name ^ "' is a reserved word");
                 {venv=venv, tenv=tenv})
