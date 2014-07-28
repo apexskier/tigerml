@@ -39,15 +39,15 @@ struct
 
       fun assemOper(oper) =
         (case oper
-          of T.PLUS => "add"
-           | T.MINUS => "sub"
-           | T.MUL => "imul"
-           | T.DIV => "idiv"
-           | T.AND => "and"
-           | T.OR => "or"
-           | T.LSHIFT => "shl"
-           | T.RSHIFT => "shr"
-           | T.ARSHIFT => "sar"
+          of T.PLUS => "addq"
+           | T.MINUS => "subq"
+           | T.MUL => "imulq"
+           | T.DIV => "idivq"
+           | T.AND => "andq"
+           | T.OR => "orq"
+           | T.LSHIFT => "shlq"
+           | T.RSHIFT => "shrq"
+           | T.ARSHIFT => "sarq"
            | T.XOR => "xor")
 
       fun munchStm(T.SEQ(a, b)) =
@@ -160,12 +160,12 @@ struct
               val arg' = munchExp arg
             in
               emit(A.MOVE{assem="movq `s0, `d0\n",
-                         src=arg', dst=List.nth(Frame.argRegs, argnum)});
+                         src=arg', dst=List.nth(F.argRegs, argnum)});
               arg' :: munchArgs(argnum + 1, args)
             end
         | munchArgs(argnum, []) = []
 
-      and munchExp(T.BINOP(oper, e1, e2)) =
+      and munchExp(T.BINOP(oper, e1, e2)) = (* TODO: multiply needs to be written, as it does some crazy stuff with other registers *)
             result(fn r => (emit(A.MOVE{assem="movq `s0, `d0\n",
                                        src=munchExp e1, dst=r});
                            emit(A.MOVE{assem=assemOper oper ^ " `s0, `d0\n",

@@ -5,6 +5,7 @@ struct
                   | InReg of Temp.temp
   datatype frag = PROC of {body: Tree.stm, frame: frame}
                 | STRING of Temp.label * string
+  type register = Temp.temp (* NOTE: in the book, this is a string *)
 
   val wordsize = 8
 
@@ -85,4 +86,12 @@ struct
   (* Put a string in memory with a label refering to it *)
   fun string (label, str) =
     (Symbol.name label ^ ": .string \"" ^ str ^ "\"\n.text\n")
+
+  val tempMap =
+    let
+      fun enter((key:Temp.temp, value:string), table) =
+        Temp.Table.enter(table, key, value)
+    in
+      List.foldl enter Temp.Table.empty (ListPair.zip(registerTemps, registers))
+    end
 end

@@ -26,9 +26,9 @@ sig
   1. and 2. as above;
   7. Every CJUMP(_,t,f) is immediately followed by LABEL f.
   The blocks are reordered to satisfy property 7; also
-in this reordering as many JUMP(T.NAME(lab)) statements
-as possible are eliminated by falling through into T.LABEL(lab).
-*)
+  in this reordering as many JUMP(T.NAME(lab)) statements
+  as possible are eliminated by falling through into T.LABEL(lab).
+  *)
 end
 
 structure Canon : CANON =
