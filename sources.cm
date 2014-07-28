@@ -10,8 +10,12 @@ amd64gen.sml
 env.sml
 errormsg.sml
 findescape.sml
+flowgraph.sml
 frame.sig
+graph.sig
+graph.sml
 amd64frame.sml
+makegraph.sml
 parse.sml
 prabsyn.sml
 printtree.sml
