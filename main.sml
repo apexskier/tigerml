@@ -10,7 +10,7 @@ structure Main = struct
   fun emitproc out (F.PROC{body,frame}) =
         let
           val _ = print (Symbol.name(F.name frame) ^ ":\n")
-          val _ = (Printtree.printtree(out, body))
+          val _ = TextIO.output(out, Symbol.name(F.name frame) ^ ":\n")
           val stms = Canon.traceSchedule(Canon.basicBlocks(Canon.linearize body))
           val _ = app (fn s => Printtree.printtree(TextIO.stdOut, s)) stms
           val instrs = List.concat(map (Amd64Codegen.codegen frame) stms)

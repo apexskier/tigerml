@@ -8,11 +8,40 @@ struct
 
   val wordsize = 8
 
-  val rsp = Temp.newTemp()
-  val rax = Temp.newTemp()
+  val rsp = Temp.newTemp() (* stack pointer *)
+  val rax = Temp.newTemp() (* return value *)
+
+  val rdi = Temp.newTemp() (* argument #1 *)
+  val rsi = Temp.newTemp() (* argument #2 *)
+  val rdx = Temp.newTemp() (* argument #3 *)
+  val rcx = Temp.newTemp() (* argument #4 *)
+  val r8 = Temp.newTemp() (* argument #5 *)
+  val r9 = Temp.newTemp() (* argument #6 *)
+
+  val r10 = Temp.newTemp()
+  val r11 = Temp.newTemp()
+  val r12 = Temp.newTemp()
+  val r13 = Temp.newTemp()
+  val r14 = Temp.newTemp()
+  val r15 = Temp.newTemp()
+
+  val rbp = Temp.newTemp()
+  val rbx = Temp.newTemp()
 
   val FP = rsp
   val RA = rax
+
+  val registers = ["rsp", "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "r8",
+                   "r9", "r10", "r11", "r12", "r13", "r14", "r15" ]
+  val registerTemps = [rsp, rax, rbx, rcx, rdx, rsi, rdi, rbp, r8,
+                       r9, r10, r11, r12, r13, r14, r15]
+
+  val argRegs = [rdi, rsi, rdx, rcx, r8, r9]
+  val calleeSaves = [rbx, r12, r13, r14, r15]
+  val callerSaves = [rax, r10, r11]
+  val specialRegs = [rsp, rbp]
+
+  val colorables = calleeSaves @ callerSaves
 
   fun newFrame{name, formals} =
     {name=name, formals=formals, locals=ref 0}

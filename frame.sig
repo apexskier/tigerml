@@ -12,6 +12,8 @@ sig
 
   val FP : Temp.temp
   val RA : Temp.temp
+  val callerSaves : Temp.temp list
+  val argRegs : Temp.temp list
   val wordsize : int
   val exp : access -> Tree.exp -> Tree.exp
 

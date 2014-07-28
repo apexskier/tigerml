@@ -9,8 +9,8 @@ structure Assem = struct
                             jump: label list option}
                  | LABEL of {assem: string, lab: Temp.label}
                  | MOVE of {assem: string,
-                 dst: temp,
-                 src: temp}
+                            dst: temp,
+                            src: temp}
 
   fun format saytemp =
     let
