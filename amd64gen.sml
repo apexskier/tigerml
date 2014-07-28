@@ -200,12 +200,12 @@ struct
             (result(fn r => emit(A.OPER{assem="call " ^ S.name n ^ "\n",
                                        src=munchArgs(0, args),
                                        dst=F.callerSaves, jump=NONE}));
-            F.RA)
+            F.RV)
         | munchExp(T.CALL(e, args)) =
             (result(fn r => emit(A.OPER{assem="call *`s0\n",
                                        src=munchExp e :: munchArgs(0, args),
                                        dst=F.callerSaves, jump=NONE}));
-            F.RA)
+            F.RV)
 
     in
       munchStm stm;

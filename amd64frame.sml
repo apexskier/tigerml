@@ -30,7 +30,7 @@ struct
   val rbx = Temp.newTemp()
 
   val FP = rsp
-  val RA = rax
+  val RV = rax
 
   val registers = ["rsp", "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "r8",
                    "r9", "r10", "r11", "r12", "r13", "r14", "r15" ]
@@ -94,4 +94,17 @@ struct
     in
       List.foldl enter Temp.Table.empty (ListPair.zip(registerTemps, registers))
     end
+
+  fun procEntryExit1(frame, stm) =
+    stm
+
+  fun procEntryExit2(frame, body) =
+    body @ [Assem.OPER{assem="",            (* this just sets some stuff as live, for register allocation *)
+            src=[RV] @ calleeSaves @ specialRegs,
+            dst=nil, jump=SOME[]}]
+
+  fun procEntryExit3(frame as {name, formals, locals}, body) =
+    {prolog="PROCEDURE " ^ Symbol.name name ^ "\n",
+     body=body,
+     epilog="END " ^ Symbol.name name ^ "\n"}
 end

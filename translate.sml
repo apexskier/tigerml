@@ -432,7 +432,7 @@ struct
         let
           val tree =
             if returns then
-              T.MOVE(T.TEMP F.RA, unEx body)
+              T.MOVE(T.TEMP F.RV, unEx body)
             else unNx body
         in
           fragments := F.PROC{body=tree,
