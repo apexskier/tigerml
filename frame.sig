@@ -16,4 +16,5 @@ sig
   val exp : access -> Tree.exp -> Tree.exp
 
   val externalCall : string * Tree.exp list -> Tree.exp
+  val string : Temp.label * string -> string
 end

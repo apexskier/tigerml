@@ -52,4 +52,8 @@ struct
 
   fun externalCall(name, args) =
     Tree.CALL(Tree.NAME(Temp.namedLabel name), args)
+
+  (* Put a string in memory with a label refering to it *)
+  fun string (label, str) =
+    (Symbol.name label ^ ": .string \"" ^ str ^ "\"\n.text\n")
 end
