@@ -199,13 +199,17 @@ struct
         | munchExp(T.CALL(T.NAME n, args)) =
             (result(fn r => emit(A.OPER{assem="call " ^ S.name n ^ "\n",
                                        src=munchArgs(0, args),
-                                       dst=F.callerSaves, jump=NONE}));
+                                       dst=F.callerSaves, jump=SOME[n]}));
             F.RV)
         | munchExp(T.CALL(e, args)) =
-            (result(fn r => emit(A.OPER{assem="call *`s0\n",
-                                       src=munchExp e :: munchArgs(0, args),
-                                       dst=F.callerSaves, jump=NONE}));
-            F.RV)
+            let
+              val e' = munchExp e
+            in
+              result(fn r => emit(A.OPER{assem="call *`s0\n",
+                                         src=munchExp e :: munchArgs(0, args),
+                                         dst=F.callerSaves, jump=SOME[]}));
+              F.RV
+            end
 
     in
       munchStm stm;

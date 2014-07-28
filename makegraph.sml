@@ -7,6 +7,8 @@ structure MakeGraph : MAKEGRAPH =
 struct
   structure A = Assem
   structure G = Flow.Graph
+  structure S = Symbol
+  structure E = ErrorMsg
 
   fun instrs2graph(instrs) =
     let
@@ -20,23 +22,27 @@ struct
             in
               ((case h
                 of A.OPER{assem, dst, src, jump} =>
+                    (print assem;
                     {instrs=instrsTable',
                      def=G.Table.enter(def, node, dst),
                      use=G.Table.enter(use, node, src),
-                     ismove=G.Table.enter(ismove, node, false)}
+                     ismove=G.Table.enter(ismove, node, false)})
                  | A.LABEL{assem, lab} =>
+                    (print assem;
                     {instrs=instrsTable',
                      def=G.Table.enter(def, node, nil),
                      use=G.Table.enter(use, node, nil),
-                     ismove=G.Table.enter(ismove, node, false)}
+                     ismove=G.Table.enter(ismove, node, false)})
                  | A.MOVE{assem, dst, src} =>
+                    (print assem;
                     {instrs=instrsTable',
                      def=G.Table.enter(def, node, [dst]),
                      use=G.Table.enter(use, node, [src]),
-                     ismove=G.Table.enter(ismove, node, true)}), nodes @ [node])
+                     ismove=G.Table.enter(ismove, node, true)}), nodes @ [node]))
             end
         | iterInstrs([]) =
             ({instrs=emptyTable, def=emptyTable, use=emptyTable, ismove=emptyTable}, nil)
+
       val ({instrs=instrsTable, def, use, ismove}, nodes) = iterInstrs(instrs)
 
       fun getNode(a::b, l):G.node =
@@ -47,32 +53,33 @@ struct
                 of SOME(A.LABEL{assem, lab}) =>
                   if l = lab then a else getNode(b, l)
                  | SOME _ => getNode(b, l)
-                 | NONE => ErrorMsg.impossible ("node for label '" ^ Symbol.name l ^ "' not found")
+                 | NONE => E.impossible ("node for label '" ^ S.name l ^ "' not found")
             end
-        | getNode(_, l) = ErrorMsg.impossible ("node for label '" ^ Symbol.name l ^ "' not found")
+        | getNode(_, l) = E.impossible ("node for label '" ^ S.name l ^ "' not found")
 
-      fun makeEdges(nodes) =
-        let
-          val (a::(b::c)) = nodes
-          val instr = G.Table.look(instrsTable, a)
-        in
-          G.mk_edge{from=a, to=b};
-          case instr
-            of SOME(A.OPER{assem, dst, src, jump}) =>
-              (case jump
-                of SOME labs =>
-                  let
-                    fun mkedge(l) =
-                      G.mk_edge({from=a, to=getNode(nodes, l)})
-                  in
-                    app mkedge labs
-                  end
-                 | NONE => ())
-             | SOME _ => ()
-             | NONE => ();
-          makeEdges(b::c);
-          ()
-        end
+      fun makeEdges(a::(b::c)) =
+            let
+              val instr = G.Table.look(instrsTable, a)
+            in
+              G.mk_edge{from=a, to=b};
+              case instr
+                of SOME(A.OPER{assem, dst, src, jump}) =>
+                  (case jump
+                    of SOME labs =>
+                      let
+                        fun mkedge(l) =
+                          G.mk_edge({from=a, to=getNode(nodes, l)})
+                      in
+                        app mkedge labs
+                      end
+                     | NONE => ())
+                 | SOME _ => ()
+                 | NONE => ();
+              makeEdges(b::c);
+              ()
+            end
+         | makeEdges(_) = ()
+
     in
       makeEdges(nodes);
       (Flow.FGRAPH{control=g,
