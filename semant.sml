@@ -203,26 +203,26 @@ struct
             (case S.look(venv, func)
               of SOME(E.FunEntry{level=funlevel, label, formals, result=resultTy}) =>
                   let
-                    val frmsLen = length formals
-                    val argsLen = length args
-                    fun matchTy(a, f) =
+                    fun matchTyGetExp(a, f) =
                       let
                         val {exp=aExp, ty=ty} = trexp a
                       in
                         if tyEq(ty, f) then ()
                         else
-                          error pos ("wrong argument type: '" ^ S.name func ^ "'")
+                          error pos ("wrong argument type: '" ^ S.name func ^ "'");
+                        aExp
                       end
+                    val frmsLen = length formals
+                    val argsLen = length args
                   in
                     if frmsLen <> argsLen then
                       (error pos ("incorrect number of arguments: found " ^ Int.toString argsLen ^ ", expected " ^ Int.toString frmsLen);
                       errExpty)
                     else
-                      (ListPair.app matchTy(args, formals);
                       {exp=Tr.callExp{name=label,
                                       level=level,
                                       funLevel=funlevel,
-                                      args=(List.map getExp)(List.map trexp args)}, ty=resultTy})
+                                      args=ListPair.map matchTyGetExp(args, formals)}, ty=resultTy}
                   end
                | SOME(E.VarEntry _) =>
                   (error pos ("attempting to call a regular variable: '" ^ S.name func ^ "'");
