@@ -3,7 +3,10 @@ Group is
 Run.sml
 
 absyn.sml
+assem.sml
 canon.sml
+codegen.sig
+amd64gen.sml
 env.sml
 errormsg.sml
 findescape.sml
@@ -23,6 +26,8 @@ tiger.grm
 translate.sml
 tree.sml
 types.sml
+
+main.sml
 
 (* smlnj-lib.cm *)
 (* ml-yacc-lib.cm *)
