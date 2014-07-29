@@ -5,7 +5,7 @@ struct
                   | InReg of Temp.temp
   datatype frag = PROC of {body: Tree.stm, frame: frame}
                 | STRING of Temp.label * string
-  type register = Temp.temp (* NOTE: in the book, this is a string *)
+  type register = string
 
   val wordsize = 8
 

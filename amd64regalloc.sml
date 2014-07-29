@@ -18,9 +18,9 @@ struct
       val _ = Liveness.show(TextIO.stdOut, igraph)
 
       val (allocation, temps) = Amd64Color.color{interference=igraph,
-                                                 initial=TT.empty,
+                                                 initial=F.tempMap,
                                                  spillCost=(fn _ => 0),
-                                                 registers=F.colorables}
+                                                 registers=F.registers}
     in
       (instrs, allocation)
     end
