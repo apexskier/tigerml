@@ -311,5 +311,4 @@ struct
     in
       TextIO.output(out, String.concatWith "\n" (map nodeStr nodeList) ^ "\n")
     end
-
 end

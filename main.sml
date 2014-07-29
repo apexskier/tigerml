@@ -17,13 +17,7 @@ structure Main = struct
           val instrs = List.concat(map (Amd64Codegen.codegen frame) stms)
           val {prolog, body=instrs', epilog} = F.procEntryExit3(frame, instrs)
 
-          val _ = print "\n## Control flow graph\n"
-          val (cfGraph as Flow.FGRAPH{control, def, use, ismove}, cfNodes) = MakeGraph.instrs2graph(instrs)
-          val _ = Flow.show(TextIO.stdOut, cfGraph)
-
-          val _ = print "\n## Interference graph\n"
-          val (igraph as Liveness.IGRAPH{graph, tnode, gtemp, moves}, getOuts) = Liveness.interferenceGraph(cfGraph)
-          val _ = Liveness.show(TextIO.stdOut, igraph)
+          val (allocation, temps) = Amd64RegAlloc.alloc(instrs', frame)
 
           fun format(t) =
             case Temp.Table.look(F.tempMap, t)

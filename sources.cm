@@ -7,6 +7,8 @@ assem.sml
 canon.sml
 codegen.sig
 amd64gen.sml
+color.sig
+amd64color.sml
 env.sml
 errormsg.sml
 findescape.sml
@@ -20,6 +22,8 @@ makegraph.sml
 parse.sml
 prabsyn.sml
 printtree.sml
+regalloc.sig
+amd64regalloc.sml
 semant.sml
 symbol.sml
 table.sig

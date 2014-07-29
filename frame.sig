@@ -31,4 +31,5 @@ sig
   (* private to all but amd64frame *)
   val callerSaves : register list
   val argRegs : register list
+  val colorables : register list
 end
