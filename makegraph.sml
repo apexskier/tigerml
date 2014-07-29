@@ -22,23 +22,20 @@ struct
             in
               ((case h
                 of A.OPER{assem, dst, src, jump} =>
-                    (print assem;
                     {instrs=instrsTable',
                      def=G.Table.enter(def, node, dst),
                      use=G.Table.enter(use, node, src),
-                     ismove=G.Table.enter(ismove, node, false)})
+                     ismove=G.Table.enter(ismove, node, false)}
                  | A.LABEL{assem, lab} =>
-                    (print assem;
                     {instrs=instrsTable',
                      def=G.Table.enter(def, node, nil),
                      use=G.Table.enter(use, node, nil),
-                     ismove=G.Table.enter(ismove, node, false)})
+                     ismove=G.Table.enter(ismove, node, false)}
                  | A.MOVE{assem, dst, src} =>
-                    (print assem;
                     {instrs=instrsTable',
                      def=G.Table.enter(def, node, [dst]),
                      use=G.Table.enter(use, node, [src]),
-                     ismove=G.Table.enter(ismove, node, true)}), nodes @ [node]))
+                     ismove=G.Table.enter(ismove, node, true)}), nodes @ [node])
             end
         | iterInstrs([]) =
             ({instrs=emptyTable, def=emptyTable, use=emptyTable, ismove=emptyTable}, nil)
@@ -79,7 +76,6 @@ struct
               ()
             end
          | makeEdges(_) = ()
-
     in
       makeEdges(nodes);
       (Flow.FGRAPH{control=g,
@@ -87,38 +83,4 @@ struct
                    use=use,
                    ismove=ismove}, nil)
     end
-
-(*
-*
-*
-  datatype flowgraph = FGRAPH of {control: Graph.graph,
-                                  def: Temp.temp list Graph.Table.table,
-                                  use: Temp.temp list Graph.Table.table,
-                                  ismove: bool Graph.Table.table}
-*
-*
-signature GRAPH =
-sig
-  type graph
-  type node
-
-  val nodes: graph -> node list
-  val succ: node -> node list
-  val pred: node -> node list
-  val adj: node -> node list   (* succ+pred *)
-  val eq: node*node -> bool
-
-  val newGraph: unit -> graph
-  val newNode : graph -> node
-  exception GraphEdge
-  val mk_edge: {from: node, to: node} -> unit
-  val rm_edge: {from: node, to: node} -> unit
-
-  structure Table : TABLE
-  sharing type Table.key = node
-
-  val nodename: node->string  (* for debugging only *)
-end
-*
-* *)
 end

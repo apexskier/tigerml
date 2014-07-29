@@ -14,7 +14,11 @@ structure Main = struct
           val stms = Canon.traceSchedule(Canon.basicBlocks(Canon.linearize body))
           val _ = app (fn s => Printtree.printtree(TextIO.stdOut, s)) stms
           val instrs = List.concat(map (Amd64Codegen.codegen frame) stms)
-          val _ = MakeGraph.instrs2graph(instrs)
+          val _ = print "Generating control flow graph\n"
+          val (cfGraph as Flow.FGRAPH{control, def, use, ismove}, cfNodes) = MakeGraph.instrs2graph(instrs)
+          val _ = print "Generating interference graph\n"
+          val (igraph as Liveness.IGRAPH{graph, tnode, gtemp, moves}, getOuts) = Liveness.interferenceGraph(cfGraph)
+          val _ = Liveness.show(TextIO.stdOut, igraph)
           fun format(t) =
             case Temp.Table.look(F.tempMap, t)
               of SOME(s) => "%" ^ s
