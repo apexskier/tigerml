@@ -6,6 +6,17 @@ struct
                                   use: Temp.temp list Graph.Table.table,
                                   ismove: bool Graph.Table.table}
 
+
+  fun show(out, FGRAPH{control, def, use, ismove}) =
+    let
+      val nodeList = Graph.nodes control
+      val nodeStrings = (fn n => (Graph.nodename n))
+      fun nodeStr(n) =
+        nodeStrings n ^ " --> " ^ (String.concatWith ", " (map nodeStrings (Graph.adj(n))))
+    in
+      TextIO.output(out, String.concatWith "\n" (map nodeStr nodeList) ^ "\n")
+    end
+
   (* Note:  any "use" within the block is assumed to be BEFORE a "def"
   of the same variable.  If there is a def(x) followed by use(x)
   in the same block, do not mention the use in this data structure,
