@@ -13,7 +13,9 @@ structure Main = struct
           val _ = TextIO.output(out, Symbol.name(F.name frame) ^ ":\n")
           val stms = Canon.traceSchedule(Canon.basicBlocks(Canon.linearize body))
           val _ = app (fn s => Printtree.printtree(TextIO.stdOut, s)) stms
+
           val instrs = List.concat(map (Amd64Codegen.codegen frame) stms)
+          val {prolog, body=instrs', epilog} = F.procEntryExit3(frame, instrs)
 
           val _ = print "\n## Control flow graph\n"
           val (cfGraph as Flow.FGRAPH{control, def, use, ismove}, cfNodes) = MakeGraph.instrs2graph(instrs)

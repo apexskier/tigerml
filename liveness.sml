@@ -33,6 +33,11 @@ struct
       val compare = Int.compare
     end)
 
+  fun format(t) =
+    case T.Table.look(Amd64Frame.tempMap, t)
+      of SOME(s) => "%" ^ s
+       | NONE => T.makeString(t)
+
   datatype igraph = IGRAPH of {graph:G.graph,
                                tnode:T.temp -> G.node,
                                gtemp:G.node -> T.temp,
@@ -105,18 +110,100 @@ struct
       fun tnode(t:T.temp):G.node =
         case TT.look(iGraphNodes, t)
           of SOME node => node
-           | NONE => ErrorMsg.impossible ("node not found for temp '" ^ T.makeString t ^ "'")
+           | NONE => ErrorMsg.impossible ("node not found for temp '" ^ format t ^ "'")
 
       fun gtemp(n:G.node):T.temp =
         case GT.look(iGraphTemps, n)
           of SOME temp => temp
            | NONE => ErrorMsg.impossible ("node '" ^ G.nodename n ^ "' not found")
 
-      val outLiveMap = FGT.empty
-      val inLiveMap = FGT.empty
+      val initInLives = map (fn _ => tempSet.empty) fgNodes
+      val initOutLives = map (fn _ => tempSet.empty) fgNodes
+
+      fun repeat(inLives:tempSet.set list, outLives:tempSet.set list):(tempSet.set list * tempSet.set list) =
+        let
+          fun each(node, (inLive:tempSet.set, outLive:tempSet.set)) =
+            let
+              fun unionIn(node':G.node, outs:tempSet.set) =
+                let
+                  val i = ref 0
+                  fun tr(nodes) =
+                    if FG.eq(node, hd nodes) then
+                      !i
+                    else
+                      (i := !i + 1;
+                      tr(tl nodes))
+                  val n = tr(fgNodes)
+                in
+                  tempSet.union(outs, List.nth(inLives, n))
+                end
+            in
+              (tempSet.union(lookSet(use, node),
+                             tempSet.difference(outLive,
+                                                lookSet(def, node))),
+              foldl unionIn outLive (G.succ(node)))
+            end
+
+          val nodesLives = ListPair.zip(fgNodes, ListPair.zip(inLives, outLives))
+
+          val inouts = map each nodesLives
+          val (inLives', outLives') = ListPair.unzip(inouts)
+
+          (* DEBUG:
+          fun printstuff(n, (inl, outl)) =
+            let
+              fun printstuff'(t) =
+                print ("fg node '"^FG.nodename n^"' has in temp '"^format t^"'\n")
+              fun printstuff''(t) =
+                print ("fg node '"^FG.nodename n^"' has out temp '"^format t^"'\n")
+            in
+              app printstuff' (tempSet.listItems inl);
+              app printstuff'' (tempSet.listItems outl)
+            end
+
+          val _ = print "originals\n"
+          val _ = app printstuff (ListPair.zip(fgNodes, ListPair.zip(inLives, outLives)))
+          val _ = print "newones\n"
+          val _ = app printstuff (ListPair.zip(fgNodes, ListPair.zip(inLives', outLives'))) *)
+
+          fun listcomp(i1:tempSet.set, i2:tempSet.set):bool =
+            let
+              val i1' = tempSet.listItems i1
+              val i2' = tempSet.listItems i2
+            in
+              if length i1' <> length i2' then false
+              else
+                List.all (fn (a, b) => a = b) (ListPair.zip(i1', i2'))
+            end
+          fun listlistcomp(l1:tempSet.set list, l2:tempSet.set list):bool =
+            List.all (fn (i1, i2) => listcomp(i1, i2)) (ListPair.zip(l1, l2))
+          val stop = (listlistcomp(inLives, inLives') andalso listlistcomp(outLives, outLives'))
+        in
+          if stop then
+            (inLives', outLives')
+          else
+            repeat(inLives', outLives')
+        end
+
+      val (inLives, outLives) = repeat(initInLives, initOutLives)
+
+      fun buildLiveMaps((node, (inLives, outLives)), (inLiveMaps, outLiveMaps)) =
+        (FGT.enter(inLiveMaps, node, inLives), FGT.enter(outLiveMaps, node, outLives))
+
+      val (inLiveMaps, outLiveMaps) = foldl buildLiveMaps (FGT.empty, FGT.empty)
+                                                          (ListPair.zip(fgNodes,
+                                                                 ListPair.zip(inLives,
+                                                                              outLives)))
+
+
+      fun getOutLives(n) =
+        tempSet.listItems(case FGT.look(outLiveMaps, n)
+                            of SOME l => l
+                             | NONE => ErrorMsg.impossible ("node '" ^ FG.nodename n ^ "' liveOut not found"))
 
       (* Use a dynamic programming approach here to save what's already been calculated *)
-      fun calcIn(node:G.node):tempSet.set =
+      (* fun calcIn(node:G.node):tempSet.set =
+        (print ("in calcIn for node '"^G.nodename node^"'\n");
         case FGT.look(inLiveMap, node)
           of SOME(temps) => temps
            | NONE =>
@@ -126,13 +213,15 @@ struct
                                         tempSet.difference(calcOut(node),
                                                            lookSet(def, node)))
             in
-              FGT.enter(inLiveMap, node, temps);
+              FGT.enter(inLiveMap, node, temps); (* !! Here's the issue *)
               temps
-            end
+            end)
       and calcOut(node:G.node):tempSet.set =
         let
+          val _ = print ("in calcIn for node '"^G.nodename node^"'\n")
           fun unionIn(node':G.node, outs:tempSet.set) =
-            tempSet.union(outs, calcIn(node'))
+            (print ("in calcIn.unionIn for node '"^G.nodename node^"', '"^G.nodename node'^"'\n");
+            tempSet.union(outs, calcIn(node')))
         in
           case FGT.look(outLiveMap, node)
             of SOME(temps) => temps
@@ -146,11 +235,11 @@ struct
         end
 
       fun outList(node:G.node):T.temp list =
-        tempSet.listItems(calcOut(node))
+        tempSet.listItems(calcOut(node)) *)
 
       fun genIGraph(h::t:FG.node list, moves) =
             let
-              val outs = outList(h)
+              val outs = getOutLives(h)
               val (g, n) = h
             in
               if case FGT.look(ismove, h)
@@ -205,18 +294,17 @@ struct
         case GT.look(iGraphTemps, node)
           of SOME(t) => t
            | NONE => ErrorMsg.impossible ("temp -> node '" ^ G.nodename node ^ "' not found")
-
     in
       (IGRAPH{graph=iGraph,
               tnode=tnode,
               gtemp=gTemp,
-              moves=moves}, outList)
+              moves=moves}, getOutLives)
     end
 
   and show(out, IGRAPH{graph, tnode, gtemp, moves}) =
     let
       val nodeList = G.nodes graph
-      val nodeStrings = (fn n => (T.makeString(gtemp n)))
+      val nodeStrings = (fn n => (format (gtemp n)))
       fun nodeStr(n) =
         nodeStrings n ^ " --> " ^ (String.concatWith ", " (map nodeStrings (G.adj(n))))
     in

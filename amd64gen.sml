@@ -71,18 +71,18 @@ struct
                           jump=SOME labs})
             end
 
-        | munchStm(T.CJUMP(oper, T.CONST i, e2, l1, l2)) =
+        | munchStm(T.CJUMP(oper, T.CONST i, e, l1, l2)) =
             emit(A.OPER{assem="cmp `s0, $" ^ Int.toString i ^ "\n" ^
                               assemOperJmp oper ^ " " ^
                               (if oper = T.NE then S.name l2 else S.name l1) ^ "\n",
-                        src=[munchExp e2],
+                        src=[munchExp e],
                         dst=nil,
                         jump=SOME[l1, l2]})
-        | munchStm(T.CJUMP(oper, e1, T.CONST i, l1, l2)) =
+        | munchStm(T.CJUMP(oper, e, T.CONST i, l1, l2)) =
             emit(A.OPER{assem="cmp $" ^ Int.toString i ^ ", `s0\n" ^
                               assemOperJmp oper ^ " " ^
                               (if oper = T.NE then S.name l2 else S.name l1) ^ "\n",
-                        src=[munchExp e1],
+                        src=[munchExp e],
                         dst=nil,
                         jump=SOME[l1, l2]})
         | munchStm(T.CJUMP(oper, e1, e2, l1, l2)) =
@@ -115,19 +115,21 @@ struct
         | munchStm(T.MOVE(T.TEMP t0, T.BINOP(oper, T.CONST i, T.TEMP t1))) =
             if t1 = t0 then
               emit(A.OPER{assem=assemOper oper ^ " $" ^ Int.toString i ^ ", `s0\n",
-                          src=[t0], dst=[t0], jump=NONE})
+                          src=[t0, t1], dst=[t0], jump=NONE})
             else
-              emit(A.OPER{assem="movq `s0, `d0\n" ^
-                                 assemOper oper ^ " $" ^ Int.toString i ^ ", `d0\n",
-                          src=[t1], dst=[t0], jump=NONE})
+              (emit(A.MOVE{assem="movq `s0, `d0\n",
+                          src=t1, dst=t0});
+              emit(A.OPER{assem=assemOper oper ^ " $" ^ Int.toString i ^ ", `d0\n",
+                          src=[], dst=[t0], jump=NONE}))
         | munchStm(T.MOVE(T.TEMP t0, T.BINOP(oper, T.TEMP t1, T.CONST i))) =
             if t1 = t0 then
               emit(A.OPER{assem=assemOper oper ^ " $" ^ Int.toString i ^ ", `s0\n",
-                          src=[t0], dst=[t0], jump=NONE})
+                          src=[t0, t1], dst=[t0], jump=NONE})
             else
-              emit(A.OPER{assem="movq `s0, `d0\n" ^
-                                 assemOper oper ^ " $" ^ Int.toString i ^ ", `d0\n",
-                          src=[t1], dst=[t0], jump=NONE})
+              (emit(A.MOVE{assem="movq `s0, `d0\n",
+                          src=t1, dst=t0});
+              emit(A.OPER{assem=assemOper oper ^ " $" ^ Int.toString i ^ ", `d0\n",
+                          src=[], dst=[t0], jump=NONE}))
         | munchStm(T.MOVE(T.TEMP t0, T.BINOP(oper, T.TEMP t1, T.TEMP t2))) =
             if t0 = t1 then
               emit(A.OPER{assem=assemOper oper ^ " `s1, `d0\n",
@@ -137,13 +139,15 @@ struct
                 emit(A.OPER{assem=assemOper oper ^ " `s1, `d0\n",
                             src=[t0, t1], dst=[t0], jump=NONE})
               else
-                emit(A.OPER{assem="movq `s0, `d0\n" ^
-                                   assemOper oper ^ " `s1, `d0\n",
-                            src=[t1, t2], dst=[t0], jump=NONE})
+                (emit(A.MOVE{assem="movq `s0, `d0\n",
+                            src=t1, dst=t0});
+                emit(A.OPER{assem=assemOper oper ^ " `s1, `d0\n",
+                            src=[t2], dst=[t0], jump=NONE}))
         | munchStm(T.MOVE(T.TEMP t, T.CONST i)) =
-            emit(A.MOVE{assem="movq $" ^ Int.toString i ^ ", `d0\n",
-                        src=Temp.newTemp(),
-                        dst=t})
+            emit(A.OPER{assem="movq $" ^ Int.toString i ^ ", `d0\n",
+                        src=nil,
+                        dst=[t],
+                        jump=NONE})
         | munchStm(T.MOVE(T.TEMP t, e)) =
             emit(A.MOVE{assem="movq `s0, `d0\n",
                         src=munchExp e,
@@ -199,7 +203,7 @@ struct
         | munchExp(T.CALL(T.NAME n, args)) =
             (result(fn r => emit(A.OPER{assem="call " ^ S.name n ^ "\n",
                                        src=munchArgs(0, args),
-                                       dst=F.callerSaves, jump=SOME[n]}));
+                                       dst=F.callerSaves, jump=NONE}));
             F.RV)
         | munchExp(T.CALL(e, args)) =
             let
@@ -207,7 +211,7 @@ struct
             in
               result(fn r => emit(A.OPER{assem="call *`s0\n",
                                          src=munchExp e :: munchArgs(0, args),
-                                         dst=F.callerSaves, jump=SOME[]}));
+                                         dst=F.callerSaves, jump=NONE}));
               F.RV
             end
 
