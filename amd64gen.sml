@@ -114,7 +114,7 @@ struct
                         jump=NONE})
         | munchStm(T.MOVE(T.TEMP t0, T.BINOP(oper, T.CONST i, T.TEMP t1))) =
             if t1 = t0 then
-              emit(A.OPER{assem=assemOper oper ^ " $" ^ Int.toString i ^ ", `s0\n",
+              emit(A.OPER{assem=assemOper oper ^ " $" ^ Int.toString i ^ ", `s0 ; coalescing a temp to const + temp instruction\n",
                           src=[t0, t1], dst=[t0], jump=NONE})
             else
               (emit(A.MOVE{assem="movq `s0, `d0\n",
@@ -123,7 +123,7 @@ struct
                           src=[], dst=[t0], jump=NONE}))
         | munchStm(T.MOVE(T.TEMP t0, T.BINOP(oper, T.TEMP t1, T.CONST i))) =
             if t1 = t0 then
-              emit(A.OPER{assem=assemOper oper ^ " $" ^ Int.toString i ^ ", `s0\n",
+              emit(A.OPER{assem=assemOper oper ^ " $" ^ Int.toString i ^ ", `s0 ; coalescing a temp to temp + const instruction\n",
                           src=[t0, t1], dst=[t0], jump=NONE})
             else
               (emit(A.MOVE{assem="movq `s0, `d0\n",
@@ -132,11 +132,11 @@ struct
                           src=[], dst=[t0], jump=NONE}))
         | munchStm(T.MOVE(T.TEMP t0, T.BINOP(oper, T.TEMP t1, T.TEMP t2))) =
             if t0 = t1 then
-              emit(A.OPER{assem=assemOper oper ^ " `s1, `d0\n",
+              emit(A.OPER{assem=assemOper oper ^ " `s1, `d0 ; coalescing a temp to temp + temp instruction\n",
                           src=[t0, t2], dst=[t0], jump=NONE})
             else
               if t0 = t2 then
-                emit(A.OPER{assem=assemOper oper ^ " `s1, `d0\n",
+                emit(A.OPER{assem=assemOper oper ^ " `s1, `d0 ; coalescing a temp to temp + temp instruction\n",
                             src=[t0, t1], dst=[t0], jump=NONE})
               else
                 (emit(A.MOVE{assem="movq `s0, `d0\n",

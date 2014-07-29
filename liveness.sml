@@ -275,7 +275,8 @@ struct
                             let
                               val outNode = tnode(out)
                             in
-                              G.mk_edge{from=varNode, to=outNode}
+                              if G.eq(varNode, outNode) then ()
+                              else G.mk_edge{from=varNode, to=outNode}
                             end
                         in
                           app mkedges' outs

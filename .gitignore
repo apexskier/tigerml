@@ -1,4 +1,5 @@
 push.sh
+a.out
 .cm
 *.s
 test.*
