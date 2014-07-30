@@ -19,7 +19,7 @@ struct
 
       val (allocation, temps) = Amd64Color.color{interference=igraph,
                                                  initial=F.tempMap,
-                                                 spillCost=(fn _ => 0),
+                                                 spillCost=(fn _ => 1),
                                                  registers=F.registers}
     in
       (instrs, allocation)

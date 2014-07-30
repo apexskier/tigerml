@@ -17,15 +17,21 @@ structure Main = struct
           val instrs = List.concat(map (Amd64Codegen.codegen frame) stms)
           val {prolog, body=instrs', epilog} = F.procEntryExit3(frame, instrs)
 
-          val (allocation, temps) = Amd64RegAlloc.alloc(instrs', frame)
+          val (instrs', allocation) = Amd64RegAlloc.alloc(instrs', frame)
 
           fun format(t) =
             case Temp.Table.look(F.tempMap, t)
               of SOME(s) => "%" ^ s
                | NONE => Temp.makeString(t)
-          val format0 = Assem.format(format)
+
+          fun allocFormat(t) =
+            case Temp.Table.look(allocation, t)
+              of SOME r => r
+               | NONE => ErrorMsg.impossible ("no allocated register found for temp '" ^ format(t) ^ "'")
+
+          val format0 = Assem.format(allocFormat)
         in
-          app (fn i => TextIO.output(out, format0 i)) instrs;
+          app (fn i => TextIO.output(out, format0 i)) instrs';
           print "\n"
         end
     | emitproc out (F.STRING(lab,s)) =
