@@ -17,10 +17,10 @@ struct
       val (igraph as Liveness.IGRAPH{graph, tnode, gtemp, moves}, getOuts) = Liveness.interferenceGraph(cfGraph)
       val _ = Liveness.show(TextIO.stdOut, igraph)
 
-      val (allocation, temps) = Amd64Color.color{interference=igraph,
-                                                 initial=F.tempMap,
-                                                 spillCost=(fn _ => 1),
-                                                 registers=F.registers}
+      val (allocation, temps) = Color.color{interference=igraph,
+                                            initial=F.tempMap,
+                                            spillCost=(fn _ => 1),
+                                            registers=F.registers}
     in
       (instrs, allocation)
     end

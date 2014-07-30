@@ -8,7 +8,7 @@ canon.sml
 codegen.sig
 amd64gen.sml
 color.sig
-amd64color.sml
+color.sml
 env.sml
 errormsg.sml
 findescape.sml
