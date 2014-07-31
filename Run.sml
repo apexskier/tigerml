@@ -7,4 +7,6 @@ struct
     handle Fail msg =>
       (print ("\n## Compilation error\n" ^ msg ^ "\n");
       1)
+    handle e =>
+      (print ("sml error\n"); 2)
 end

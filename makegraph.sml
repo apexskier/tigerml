@@ -81,6 +81,6 @@ struct
       (Flow.FGRAPH{control=g,
                    def=def,
                    use=use,
-                   ismove=ismove}, nil)
+                   ismove=ismove}, G.nodes(g))
     end
 end
