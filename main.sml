@@ -1,5 +1,4 @@
 structure Main = struct
-
   structure Tr = Translate
   structure F = Amd64Frame
   (* structure R = RegAlloc *)
@@ -11,7 +10,8 @@ structure Main = struct
         let
           val _ = print (Symbol.name(F.name frame) ^ ":\n")
           val _ = TextIO.output(out, Symbol.name(F.name frame) ^ ":\n")
-          val stms = Canon.traceSchedule(Canon.basicBlocks(Canon.linearize body))
+          val blocks = Canon.basicBlocks(Canon.linearize body)
+          val stms = Canon.traceSchedule(blocks)
           val _ = app (fn s => Printtree.printtree(TextIO.stdOut, s)) stms
 
           val instrs = List.concat(map (Amd64Codegen.codegen frame) stms)
@@ -59,8 +59,4 @@ structure Main = struct
       withOpenFile (filename ^ ".s")
       (fn out => (app (emitproc out) frags))
     end
-
 end
-
-
-
