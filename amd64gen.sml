@@ -145,7 +145,7 @@ struct
               else
                 (emit(A.MOVE{assem="movq `s0, `d0\n",
                             src=t1, dst=t0});
-                emit(A.OPER{assem=assemOper oper ^ " `s1, `d0\n",
+                emit(A.OPER{assem=assemOper oper ^ " `s0, `d0\n",
                             src=[t2], dst=[t0], jump=NONE}))
         | munchStm(T.MOVE(T.TEMP t, T.CONST i)) =
             emit(A.OPER{assem="movq $" ^ Int.toString i ^ ", `d0\n",

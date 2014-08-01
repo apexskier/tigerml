@@ -137,9 +137,24 @@ struct
       {prolog="\t.text\n" ^
               "\t.globl " ^ Symbol.name name ^ "\n" ^
               Symbol.name name ^ ":\n" ^
+              "pushq %rbx\n" ^
+              "pushq %r12\n" ^
+              "pushq %r14\n" ^
+              "pushq %r13\n" ^
+              "pushq %r14\n" ^
+              "pushq %r15\n" ^
+              "pushq %rbp\n" ^
               "movq %rsp, %rbp\n" ^
               "sub $" ^ Int.toString space ^ ", %rsp\n",
        body=body,
-       epilog="ret\n"}
+       epilog="movq %rbp, %rsp\n" ^
+              "popq %rbp\n" ^
+              "popq %r15\n" ^
+              "popq %r14\n" ^
+              "popq %r12\n" ^
+              "popq %r13\n" ^
+              "popq %r14\n" ^
+              "popq %rbx\n" ^
+              "ret\n"}
     end
 end

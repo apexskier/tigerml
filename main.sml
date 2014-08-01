@@ -27,7 +27,7 @@ structure Main = struct
 
           fun allocFormat(t) =
             case Temp.Table.look(allocation, t)
-              of SOME r => (print ("found register for temp '"^format(t)^"'\n"); "%" ^ r)
+              of SOME r => (print ("found register '%"^r^"' for temp '"^Temp.makeString t^"'\n"); "%" ^ r)
                | NONE => ErrorMsg.impossible ("no allocated register found for temp '" ^ format(t) ^ "'")
 
           val format0 = Assem.format(allocFormat)
