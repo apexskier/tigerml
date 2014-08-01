@@ -61,12 +61,19 @@ struct
       val compare = moveCompare
     end)
 
+  fun printList(set, name) =
+    print (name ^ ": " ^ ListFormat.listToString Temp.makeString (set) ^ "\n")
+  fun printSet(set, name) =
+    printList(nodeSet.listItems(set), name)
+
   fun alloc(instrs, frame) =
     let
+      val k:int = length F.colorables
+
       (* Node work-lists, sets, and stacks.
       * The following lists and sets are always mutually disjoint and every
       * node is always in exactly one of the sets or lists. *)
-      val precolored = ref nodeSet.empty:nodeSet.set ref (* machine registers, preassigned a color *)
+      val precolored = ref (nodeSet.addList(nodeSet.empty, F.registerTemps)):nodeSet.set ref (* machine registers, preassigned a color *)
       val initial = ref nodeSet.empty:nodeSet.set ref (* temporary registers, not precolored and not yet processed *)
       val simplifyWorklist = ref nodeSet.empty:nodeSet.set ref (* Low-degree non-move-related nodes *)
       val freezeWorklist = ref nodeSet.empty:nodeSet.set ref (* Low-degree move-related nodes *)
@@ -91,7 +98,10 @@ struct
       val degree = ref nodeMap.empty:int nodeMap.map ref (* an array containing the current degree of each node *)
       val moveList = ref nodeMap.empty:moveSet.set nodeMap.map ref  (* a mapping from a node to the list of moves it is associated with *)
       val alias = ref nodeMap.empty (* when a move (u, v) has been coalesced, and v put in coalescedNodes, then alias(v) = u *)
-      val colors = ref (foldl nodeMap.insert' nodeMap.empty (map (fn n => (print ("precoloring '"^T.makeString n^"'\n"); (n, 123))) F.colorables))
+      val initokColors = (map (fn x=>x-1) (List.tabulate(k, fn x => x+1)))
+      val colors = ref (foldl nodeMap.insert'
+                              nodeMap.empty
+                              (ListPair.zip(F.colorables, initokColors)))
 
       val instructions = ref instrs:Assem.instr list ref
 
@@ -106,6 +116,74 @@ struct
       val gtemp = ref (fn n => ErrorMsg.impossible "calling gtemp illegally")
       val moves = ref nil
       val getOuts = ref (fn n => ErrorMsg.impossible "calling getOuts illegally")
+
+      fun valOf(a:'a option, id) = (* overridden! *)
+        case a
+          of SOME(b) => b
+           | NONE => raise LibBase.NotFound
+
+      fun checkInvariants() =
+        let
+          fun degreeInvariant() =
+            let
+              fun check(u) =
+                let
+                  val du = valOf(nodeMap.find(!degree, u), "131")
+                  val alu = valOf(nodeMap.find(!adjList, u), "133")
+                in
+                  du = length (nodeSet.listItems(nodeSet.intersection(alu,
+                                                                      nodeSet.union(!precolored,
+                                                                                    nodeSet.union(!simplifyWorklist,
+                                                                                                  nodeSet.union(!freezeWorklist, !spillWorklist))))))
+                end
+            in
+              if nodeSet.all check (nodeSet.union(!simplifyWorklist, nodeSet.union(!freezeWorklist, !spillWorklist))) then ()
+              else ErrorMsg.impossible "degreeInvariant failed"
+            end
+          fun simplifyWorklistInvariant() =
+            let
+              fun check(u) =
+                let
+                  val du = valOf(nodeMap.find(!degree, u), "147")
+                  val mlu = valOf(nodeMap.find(!moveList, u), "148")
+                in
+                  du < k orelse moveSet.isEmpty(moveSet.intersection(mlu, moveSet.union(!activeMoves, !worklistMoves)))
+                end
+            in
+              if nodeSet.all check (!simplifyWorklist) then ()
+              else ErrorMsg.impossible "simplifyWorklistInvariant failed"
+            end
+          fun freezeWorklistInvariant() =
+            let
+              fun check(u) =
+                let
+                  val du = valOf(nodeMap.find(!degree, u), "160")
+                  val mlu = valOf(nodeMap.find(!moveList, u), "161")
+                in
+                  du < k orelse not(moveSet.isEmpty(moveSet.intersection(mlu, moveSet.union(!activeMoves, !worklistMoves))))
+                end
+            in
+              if nodeSet.all check (!freezeWorklist) then ()
+              else ErrorMsg.impossible "freezeWorklistInvariant failed"
+            end
+          fun spillWorklistInvariant() =
+            let
+              fun check(u) =
+                let
+                  val du = valOf(nodeMap.find(!degree, u), "160")
+                in
+                  du >= k
+                end
+            in
+              if nodeSet.all check (!spillWorklist) then ()
+              else ErrorMsg.impossible "freezeWorklistInvariant failed"
+            end
+
+          fun v(i) =
+            i()
+        in
+          app v [degreeInvariant, simplifyWorklistInvariant, freezeWorklistInvariant, spillWorklistInvariant]
+        end
 
       val allocation' = ref TT.empty:allocation ref
 
@@ -123,14 +201,34 @@ struct
           val _ = Liveness.show(TextIO.stdOut, igraph')
 
           val allTemps = nodeSet.addList(nodeSet.empty, map gtemp' (IG.nodes graph'))
-          val pcTemps = nodeSet.filter(fn t =>
-                                         case TT.look(F.tempMap, t)
-                                           of SOME _ => true
-                                            | NONE => false) allTemps
+          val initial' = nodeSet.difference(allTemps, !precolored);
+
+          val adjEdges = foldl (fn (n, edgs) => foldl (fn (n', edgs') => edgs' @ [(gtemp' n', gtemp' n), (gtemp' n, gtemp' n')]) edgs (IG.adj(n))) nil (IG.nodes(graph'))
+
+          fun forMove((u, v), mapping) =
+            let
+              val u' = gtemp' u
+              val v' = gtemp' v
+              val mapping' = nodeMap.insert(mapping, u', nodeSet.add(valOf(nodeMap.find(mapping, u'), "180") handle NotFound => nodeSet.empty, v'))
+            in
+              nodeMap.insert(mapping', v', nodeSet.add(valOf(nodeMap.find(mapping', v'), "182") handle NotFound => nodeSet.empty, u'))
+            end
+          val movesInit = foldl forMove nodeMap.empty moves'
+
+          fun getdegree(n) =
+            let
+              val deg =
+                if nodeSet.member(!precolored, gtemp' n) then valOf(Int.maxInt, "221")
+                else length(IG.adj n)
+            in
+              print ("setting initial degree of temp '"^T.makeString(gtemp' n)^"' to " ^ Int.toString(deg) ^"\n");
+              (gtemp' n, deg)
+            end
+
         in
           moveList := (foldl nodeMap.insert' nodeMap.empty (map (fn n => (gtemp' n, moveSet.empty)) (IG.nodes graph')));
-          adjList := (foldl nodeMap.insert' nodeMap.empty (map (fn n => (gtemp' n, nodeSet.addList(nodeSet.empty, map gtemp' (IG.adj n)))) (IG.nodes graph')));
-          degree := (foldl nodeMap.insert' nodeMap.empty (map (fn n => (print ("setting initial degree of temp '"^T.makeString(gtemp' n)^"'\n");(gtemp' n, 1))) (IG.nodes graph')));
+          adjList := (foldl nodeMap.insert' nodeMap.empty (map (fn n => (n, nodeSet.addList(nodeSet.empty, map gtemp' (IG.adj(tnode' n))))) (nodeSet.listItems(initial'))));
+          degree := (foldl nodeMap.insert' nodeMap.empty (map getdegree (IG.nodes graph')));
 
           control := control';
           def := def';
@@ -144,24 +242,21 @@ struct
           moves := moves';
           getOuts := getOuts';
 
-          precolored := pcTemps;
-          initial := nodeSet.difference(allTemps, pcTemps);
+          initial := initial';
+
+          adjSet := edgeSet.addList(edgeSet.empty, adjEdges);
+          adjList := List.foldl (fn (n, map') => nodeMap.insert(map', n, nodeSet.addList(nodeSet.empty, map gtemp' (IG.adj(tnode' n))))) nodeMap.empty (nodeSet.listItems(!initial));
 
           print "done with liveness analysis\n"
         end
 
-      val k:int = length F.colorables
+      val _ = livenessAnalysis()
 
       (* Utilitites *)
       fun isMove(i) =
         case FGT.look(!ismove, i)
           of SOME b => b
            | NONE => ErrorMsg.impossible "instruction not found"
-
-      fun valOf(a:'a option, id) = (* overridden! *)
-        case a
-          of SOME(b) => b
-           | NONE => ErrorMsg.impossible ("something not found: " ^ id)
 
       fun getUse(n) =
         case FGT.look(!use, n)
@@ -192,7 +287,12 @@ struct
             else if not(nodeSet.isEmpty(!freezeWorklist)) then (freeze(); repeat())
             else if not(nodeSet.isEmpty(!spillWorklist)) then (selectSpill(); repeat())
             else ();
-            print "exit repeat\n")
+            if not(nodeSet.isEmpty(!simplifyWorklist) andalso
+                   moveSet.isEmpty(!worklistMoves) andalso
+                   nodeSet.isEmpty(!freezeWorklist) andalso
+                   nodeSet.isEmpty(!spillWorklist))
+              then repeat()
+              else print "exit repeat\n")
         in
           livenessAnalysis();
           build();
@@ -217,7 +317,7 @@ struct
         end
 
       and build() =
-        let
+        (let
           val _ = print "building register allocation stuff\n"
           fun forall(b) =
             let
@@ -225,8 +325,8 @@ struct
               fun forall'(i:FG.node) =
                 (if isMove(i) then
                   let
-                    val toList = nodeSet.listItems(getDef(i))
-                    val frList = nodeSet.listItems(getUse(i))
+                    val toList = nodeSet.listItems(getUse i)
+                    val frList = nodeSet.listItems(getDef i)
                     val to =
                       if length toList <> 1 then
                         ErrorMsg.impossible "move doesn't have one to"
@@ -247,7 +347,8 @@ struct
                 nodeSet.app (fn d => nodeSet.app (fn l => addEdge(l, d)) (!live)) (getDef(i));
                 live := nodeSet.union(getUse(i), nodeSet.difference(!live, getDef(i))))
             in app forall' ([b]) end
-        in app forall (!cfNodes); print "done building\n" end
+        in app forall (!cfNodes); print "done building\n" end;
+        checkInvariants())
 
       and addEdge(u, v) =
         if not(edgeSet.member(!adjSet, (u, v))) andalso u <> v then
@@ -267,30 +368,33 @@ struct
             (initial := nodeSet.delete(!initial, n);
             if valOf(nodeMap.find(!degree, n), "244") >= k then
               spillWorklist := nodeSet.add(!spillWorklist, n)
-            else if moveRelated(n) then
+            else if moveRelated n then
               freezeWorklist := nodeSet.add(!freezeWorklist, n)
             else
-              simplifyWorklist := nodeSet.add(!simplifyWorklist, n))
+              (simplifyWorklist := nodeSet.add(!simplifyWorklist, n);
+              if nodeSet.member(!precolored, n) then print ("Putting precolored node "^T.makeString n^" in simplifyWorklist!\n") else ()))
         in
           nodeSet.app forall (!initial);
           print "exit makeWorklist\n"
         end
 
       and adjacent(n) =
-        nodeSet.difference(valOf(nodeMap.find(!adjList, n), "255"), nodeSet.addList(!coalescedNodes, !selectStack))
+        nodeSet.difference(valOf(nodeMap.find(!adjList, n), "255") handle NotFound => nodeSet.empty, nodeSet.addList(!coalescedNodes, !selectStack))
 
       and nodeMoves(n) =
         moveSet.intersection(valOf(nodeMap.find(!moveList, n), "258"), moveSet.union(!activeMoves, !worklistMoves))
 
       and moveRelated(n):bool =
-        not(moveSet.isEmpty(nodeMoves(n)))
+        not(moveSet.isEmpty(nodeMoves n))
 
       and simplify() =
         let
           val n = hd(nodeSet.listItems(!simplifyWorklist))
+          val _ = if nodeSet.member(!precolored, n) then print ("Pulling precolored node "^T.makeString n^" from simplifyWorklist!\n") else ();
         in
           simplifyWorklist := nodeSet.delete(!simplifyWorklist, n);
           selectStack := n :: (!selectStack);
+          if nodeSet.member(!precolored, n) then print ("Putting precolored node "^T.makeString n^" in selectStack!\n") else ();
           nodeSet.app decrementDegree (adjacent(n))
         end
 
@@ -302,11 +406,22 @@ struct
           degree := nodeMap.insert(!degree, m, d - 1);
           if d = k then
             (enableMoves(nodeSet.add(adjacent(m), m));
-            spillWorklist := nodeSet.delete(!spillWorklist, m);
-            if moveRelated(m) then
+            spillWorklist := nodeSet.delete(!spillWorklist, m) handle NotFound => (
+              print ("looking for node " ^ T.makeString m ^ "\n");
+              printSet(!precolored, "precolored");
+              printSet(!initial, "initial");
+              printSet(!simplifyWorklist, "simplifyWorklist");
+              printSet(!freezeWorklist, "freezeWorklist");
+              printSet(!spillWorklist, "spillWorklist");
+              printSet(!spilledNodes, "spilledNodes");
+              printSet(!coalescedNodes, "coalescedNodes");
+              printSet(!coloredNodes, "coloredNodes")
+              (* ErrorMsg.impossible "testing" *));
+            if moveRelated m then
               freezeWorklist := nodeSet.add(!freezeWorklist, m)
             else
-              simplifyWorklist := nodeSet.add(!simplifyWorklist, m))
+              (simplifyWorklist := nodeSet.add(!simplifyWorklist, m);
+              if nodeSet.member(!precolored, m) then print ("Putting precolored node "^T.makeString m^" in simplifyWorklist!\n") else ()))
           else ();
           print "exit decrementDegree\n"
         end
@@ -329,9 +444,9 @@ struct
       and coalesce() =
         let
           val _ = print "enter coalesce\n"
-          val m:moveSet.item = hd(moveSet.listItems(!worklistMoves))
-          val x = getAlias(#1 m)
-          val y = getAlias(#2 m)
+          val m as (x', y') = hd(moveSet.listItems(!worklistMoves))
+          val x = getAlias x'
+          val y = getAlias y'
           val (u, v) =
             if nodeSet.member(!precolored, y) then
               (y, x)
@@ -343,10 +458,11 @@ struct
           if u = v then
             (coalescedMoves := moveSet.add(!coalescedMoves, m);
             addWorkList(u))
-          else if nodeSet.member(!precolored, v) andalso edgeSet.member(!adjSet, (u, v)) then
+          else if nodeSet.member(!precolored, v) orelse edgeSet.member(!adjSet, (u, v)) then
             (constrainedMoves := moveSet.add(!constrainedMoves, m);
             addWorkList(u); addWorkList(v))
-          else if (nodeSet.member(!precolored, u) andalso (List.all (fn t => ok(t, u)) (nodeSet.listItems(adjacent(v))))) orelse (not(nodeSet.member(!precolored, u)) andalso conservative(nodeSet.union(adjacent(u), adjacent(v)))) then
+          else if (not(nodeSet.member(!precolored, u)) andalso (List.all (fn t => ok(t, u)) (nodeSet.listItems(adjacent(v))))) (* NOTE: the membership test for precolored nodes here is different from the book. I am restricting *)
+                  orelse (not(nodeSet.member(!precolored, u)) andalso conservative(nodeSet.union(adjacent(u), adjacent(v)))) then
             (coalescedMoves := moveSet.add(!coalescedMoves, m);
             combine(u, v);
             addWorkList(u))
@@ -356,8 +472,9 @@ struct
 
       and addWorkList(u) =
         (print "enter addWorkList\n";
-        if not(nodeSet.member(!precolored, u)) andalso not(moveRelated(u)) andalso valOf(nodeMap.find(!degree, u), "327") < k then
-          (freezeWorklist := nodeSet.delete(!freezeWorklist, u);
+        if not(nodeSet.member(!precolored, u)) andalso not(moveRelated u) andalso valOf(nodeMap.find(!degree, u), "327") < k then
+          (freezeWorklist := nodeSet.delete(!freezeWorklist, u)
+            handle NotFound => print ("T.makeString " ^ T.makeString u ^ " not found in spillWorklist\n");
           simplifyWorklist := nodeSet.add(!simplifyWorklist, u))
         else ();
         print "exit addWorkList\n")
@@ -382,15 +499,14 @@ struct
           getAlias(valOf(nodeMap.find(!alias, n), "347"))
         else n
 
-      and combine(v, u) =
+      and combine(u, v) =
         (print "enter combine\n";
         if nodeSet.member(!freezeWorklist, v) then
           freezeWorklist := nodeSet.delete(!freezeWorklist, v)
         else
           spillWorklist := nodeSet.delete(!spillWorklist, v)
           handle NotFound => print (T.makeString v ^ " not found in spillWorklist\n");
-
-        print "test\n";
+        print ("adding "^T.makeString v^" to coalescedNodes\n");
         coalescedNodes := nodeSet.add(!coalescedNodes, v);
         alias := nodeMap.insert(!alias, v, u);
         moveList := nodeMap.insert(!moveList, u, moveSet.union(valOf(nodeMap.find(!moveList, u), "357"), valOf(nodeMap.find(!moveList, v), "357b")));
@@ -409,6 +525,7 @@ struct
         in
           freezeWorklist := nodeSet.delete(!freezeWorklist, u);
           simplifyWorklist := nodeSet.add(!simplifyWorklist, u);
+          if nodeSet.member(!precolored, u) then print ("Putting precolored node "^T.makeString u^" in simplifyWorklist!\n") else ();
           freezeMoves(u);
           print "exit freeze\n"
         end
@@ -419,20 +536,21 @@ struct
           fun forall(m as (x, y)) =
             let
               val v =
-                if getAlias(y) = getAlias(u) then
-                  getAlias(x)
+                if (getAlias y) = (getAlias u) then
+                  getAlias x
                 else
-                  getAlias(y)
+                  getAlias y
             in
-              activeMoves := moveSet.delete(!activeMoves, m);
+              activeMoves := moveSet.delete(!activeMoves, m) handle NotFound => print "freezemoves notfound a\n";
               frozenMoves := moveSet.add(!frozenMoves, m);
-              if (moveSet.isEmpty(nodeMoves(v)) andalso valOf(nodeMap.find(!degree, v), "386") < k) then
-                (freezeWorklist := nodeSet.delete(!freezeWorklist, v);
-                simplifyWorklist := nodeSet.add(!simplifyWorklist, v))
+              if moveSet.isEmpty(nodeMoves v) andalso valOf(nodeMap.find(!degree, v), "386") < k then
+                (freezeWorklist := nodeSet.delete(!freezeWorklist, v) handle NotFound => print "freezemoves notfound b\n";
+                simplifyWorklist := nodeSet.add(!simplifyWorklist, v);
+                if nodeSet.member(!precolored, v) then print ("Putting precolored node "^T.makeString v^" in simplifyWorklist as a result of "^T.makeString u^" (freezeMoves)!\n") else ())
               else ()
             end
         in
-          moveSet.app forall (nodeMoves(u));
+          moveSet.app forall (nodeMoves u);
           print "exit freezeMoves\n"
         end
 
@@ -446,6 +564,7 @@ struct
         in
           spillWorklist := nodeSet.delete(!spillWorklist, m);
           simplifyWorklist := nodeSet.add(!simplifyWorklist, m);
+          if nodeSet.member(!precolored, m) then print ("Putting precolored node "^T.makeString m^" in simplifyWorklist!\n") else ();
           freezeMoves(m);
           print "exit selectSpill\n"
         end
@@ -456,10 +575,11 @@ struct
             val n =
               let val n' = hd(!selectStack)
               in selectStack := tl(!selectStack); n' end
+            val _ = if nodeSet.member(!precolored, n) then print ("Putting precolored node "^T.makeString n^" in coloredNodes!\n") else ();
             val i = ref 0
-            val okColors = ref (intSet.addList(intSet.empty, (map (fn x=>x-1) (List.tabulate(k, fn x => x+1)))))
+            val okColors = ref (intSet.addList(intSet.empty, initokColors))
             fun forall(w) =
-              if nodeSet.member((nodeSet.union(!coloredNodes, !precolored)), getAlias(w)) then
+              if nodeSet.member((nodeSet.union(!coloredNodes, !precolored)), getAlias w) then
                 let
                   val a = valOf(nodeMap.find(!colors, getAlias w), "417")
                 in
@@ -468,19 +588,30 @@ struct
                 end
               else ()
           in
-            nodeSet.app forall (valOf(nodeMap.find(!adjList, n), "420"));
+            nodeSet.app forall (valOf(nodeMap.find(!adjList, n), "420") handle NotFound => nodeSet.empty);
             if intSet.isEmpty(!okColors) then
-              spilledNodes := nodeSet.add(!spilledNodes, n)
+              (spilledNodes := nodeSet.add(!spilledNodes, n);
+              print ("spilling " ^ T.makeString n ^ "\n"))
             else
-              (coloredNodes := nodeSet.add(!coloredNodes, n);
               let
                 val c = hd(intSet.listItems(!okColors))
               in
                 print ("assigning color " ^ Int.toString c ^ " to " ^ T.makeString n ^ "\n");
+                coloredNodes := nodeSet.add(!coloredNodes, n);
                 colors := nodeMap.insert(!colors, n, c)
-              end)
+              end
           end;
-        nodeSet.app (fn n => colors := nodeMap.insert(!colors, n, valOf(nodeMap.find(!colors, getAlias(n)), "432"))) (!coalescedNodes))
+        let
+          fun addCoalescedColor(n) =
+            let
+              val c = valOf(nodeMap.find(!colors, getAlias n), "432")
+            in
+              print ("assigning color " ^ Int.toString c ^ " to " ^ T.makeString n ^ " from " ^ T.makeString(getAlias n) ^ " (c)\n");
+              colors := nodeMap.insert(!colors, n, c)
+            end
+        in
+          nodeSet.app addCoalescedColor (!coalescedNodes)
+        end)
 
       and rewriteProgram() =
         let
@@ -488,8 +619,8 @@ struct
           fun foreachSpill(node:FG.node, newtemps':nodeSet.set) =
             let
               val access = F.allocLocal(frame)(true)
-              val defs = getDef(node)
-              val uses = getUse(node)
+              val defs = getDef node
+              val uses = getUse node
               fun idx(item, ls) =
                 let
                   fun idx'(m, nil) = 0
@@ -509,6 +640,7 @@ struct
               fun forEachDef(var, newtemps) =
                 let
                   val newtemp = T.newTemp()
+                  val _ = print ("made new temp " ^ T.makeString newtemp)
                   val tree = Tree.MOVE(Tree.TEMP newtemp, F.exp(access)(Tree.TEMP F.FP))
                   val instrs = Amd64Codegen.codegen frame tree
                 in
@@ -518,6 +650,7 @@ struct
               fun forEachUse(var, newtemps) =
                 let
                   val newtemp = T.newTemp()
+                  val _ = print ("made new temp " ^ T.makeString newtemp)
                   val tree = Tree.MOVE(F.exp(access)(Tree.TEMP F.FP), Tree.TEMP newtemp)
                   val instrs = Amd64Codegen.codegen frame tree
                 in
@@ -543,6 +676,14 @@ struct
         end
     in
       main();
+      printSet(!precolored, "precolored");
+      printSet(!initial, "initial");
+      printSet(!simplifyWorklist, "simplifyWorklist");
+      printSet(!freezeWorklist, "freezeWorklist");
+      printSet(!spillWorklist, "spillWorklist");
+      printSet(!spilledNodes, "spilledNodes");
+      printSet(!coalescedNodes, "coalescedNodes");
+      printSet(!coloredNodes, "coloredNodes");
       (!instructions, !allocation')
     end
 end

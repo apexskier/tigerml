@@ -58,14 +58,20 @@ struct
             let
               val instr = G.Table.look(instrsTable, a)
             in
-              G.mk_edge{from=a, to=b};
+              if G.isAdj(a, b) then ()
+              else G.mk_edge{from=a, to=b};
               case instr
                 of SOME(A.OPER{assem, dst, src, jump}) =>
                   (case jump
                     of SOME labs =>
                       let
                         fun mkedge(l) =
-                          G.mk_edge({from=a, to=getNode(nodes, l)})
+                          let
+                            val b' = getNode(nodes, l)
+                          in
+                            if G.isAdj(a, b') then ()
+                            else G.mk_edge({from=a, to=b'})
+                          end
                       in
                         app mkedge labs
                       end

@@ -112,6 +112,12 @@ struct
                         src=[munchExp e],
                         dst=[t],
                         jump=NONE})
+        | munchStm(T.MOVE(T.MEM(T.TEMP t0), T.TEMP t1)) =
+            emit(A.OPER{assem="movq `s0, (`d0)\n",
+                        src=[t1], dst=[t0], jump=NONE})
+        | munchStm(T.MOVE(T.TEMP t0, T.MEM(T.TEMP t1))) =
+            emit(A.OPER{assem="movq (`s0), `d0\n",
+                        src=[t1], dst=[t0], jump=NONE})
         | munchStm(T.MOVE(T.TEMP t0, T.BINOP(oper, T.CONST i, T.TEMP t1))) =
             if t1 = t0 then
               emit(A.OPER{assem=assemOper oper ^ " $" ^ Int.toString i ^ ", `s0 # coalescing a temp to const + temp instruction\n",
@@ -156,8 +162,9 @@ struct
         | munchStm(T.EXP e) =
             (munchExp e; ())
 
-        | munchStm _ =
-            ErrorMsg.impossible "unexpected statement in maximal munch algorithm"
+        | munchStm tree =
+            (print "buggy tree:\n"; Printtree.printtree(TextIO.stdOut, tree);
+            ErrorMsg.impossible "unexpected statement in maximal munch algorithm")
 
       and munchArgs(argnum, arg::args) =
             let

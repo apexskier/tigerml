@@ -7,6 +7,7 @@ sig
   val succ: node -> node list
   val pred: node -> node list
   val adj: node -> node list   (* succ+pred *)
+  val isAdj: node * node -> bool
   val eq: node*node -> bool
   val compare: node * node -> order
 

@@ -44,6 +44,15 @@ struct
 		  end
   fun adj gi = pred gi @ succ gi
 
+  fun isAdj(a, b) =
+    let
+      val aadj = adj a
+      fun eq'(c) =
+        eq(c, b)
+    in
+      List.exists eq' aadj
+    end
+
   fun newNode g = (* binary search for unused node *)
     let fun look(lo,hi) =
                (* i < lo indicates i in use
