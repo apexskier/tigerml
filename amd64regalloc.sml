@@ -311,7 +311,7 @@ struct
             fun enterAlloc(n, t) =
               TT.enter(t, n, List.nth(colorableStrs, (valOf(nodeMap.find(!colors, n), "193"))))
           in
-            allocation' := nodeSet.foldl enterAlloc F.tempMap (!coloredNodes)
+            allocation' := nodeSet.foldl enterAlloc F.tempMap (nodeSet.union(!coloredNodes, !coalescedNodes))
           end;
           print "exit main\n"
         end

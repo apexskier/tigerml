@@ -17,7 +17,7 @@ structure Main = struct
           val instrs = List.concat(map (Amd64Codegen.codegen frame) stms)
           val {prolog, body=instrs', epilog} = F.procEntryExit3(frame, instrs)
 
-          val (instrs', allocation) = Amd64RegAlloc.alloc(instrs', frame)
+          val (instrs'', allocation) = Amd64RegAlloc.alloc(instrs', frame)
 
           fun format(t) =
             case Temp.Table.look(F.tempMap, t)
@@ -32,7 +32,7 @@ structure Main = struct
           val format0 = Assem.format(allocFormat)
           val _ = print "defined format0\n"
         in
-          app (fn i => TextIO.output(out, format0 i)) instrs';
+          app (fn i => TextIO.output(out, format0 i)) instrs'';
           print "done applying formatting to instrs'\n";
           print "\n"
         end
