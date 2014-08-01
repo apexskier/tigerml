@@ -282,8 +282,10 @@ struct
                   T.LABEL elLab,
                   (unCx el)(t, f),
                   T.LABEL finLab])
-         | (_, _) =>
-             error "illegal: incompatable then and else"
+         | (a, b) =>
+          (print "a:\n"; Printtree.printtree(TextIO.stdOut, unNx a);
+          print "b:\n"; Printtree.printtree(TextIO.stdOut, unNx b);
+          error "illegal: incompatable then and else")
     end
 
   and ifThenExp(test, th) =
