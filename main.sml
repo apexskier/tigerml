@@ -8,9 +8,10 @@ structure Main = struct
 
   fun emitproc out (F.PROC{body,frame}) =
         let
+          val body' = F.procEntryExit1(frame, body)
           val _ = print (Symbol.name(F.name frame) ^ ":\n")
           val _ = TextIO.output(out, Symbol.name(F.name frame) ^ ":\n")
-          val blocks = Canon.basicBlocks(Canon.linearize body)
+          val blocks = Canon.basicBlocks(Canon.linearize body')
           val stms = Canon.traceSchedule(blocks)
           val _ = app (fn s => Printtree.printtree(TextIO.stdOut, s)) stms
 
@@ -32,7 +33,9 @@ structure Main = struct
           val format0 = Assem.format(allocFormat)
           val _ = print "defined format0\n"
         in
+          TextIO.output(out, prolog);
           app (fn i => TextIO.output(out, format0 i)) instrs'';
+          TextIO.output(out, epilog);
           print "done applying formatting to instrs'\n";
           print "\n"
         end

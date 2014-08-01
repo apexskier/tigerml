@@ -10,8 +10,6 @@ struct
     let
       val ilist = ref (nil:A.instr list)
       fun emit x = ilist := x :: !ilist
-      (* val _ = emit(A.LABEL{assem=S.name(F.name frame) ^ ":\n",
-                      lab=F.name frame}) *)
       fun result(gen) =
         let
           val t = Temp.newTemp()
