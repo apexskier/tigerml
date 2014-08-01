@@ -1,8 +1,8 @@
 structure Amd64Frame : FRAME =
 struct
-  type frame = {name: Temp.label, formals: bool list, locals: int ref, entree: Tree.stm}
   datatype access = InFrame of int
                   | InReg of Temp.temp
+  type frame = {name:Temp.label, formals:bool list, accesses:access list, locals:int ref, entree:Tree.stm}
   datatype frag = PROC of {body: Tree.stm, frame: frame}
                 | STRING of Temp.label * string
   type register = string
@@ -59,44 +59,33 @@ struct
       val n = length formals
       fun itr(nil, _) = nil
         | itr(arg::rest, offset) =
-            if arg then InFrame(offset) :: itr(rest, offset + 1)
-            else InReg(Temp.newTemp()) :: itr(rest, offset)
-      val accesses:access list = itr(formals, 0) (* generate instructions to save all the arguments *)
+            if arg then
+              InFrame(offset) :: itr(rest, offset + 1)
+            else
+              InReg(let val t = Temp.newTemp() in print ("making new temp "^Temp.makeString t^" newFrame\n"); t end) :: itr(rest, offset)
+      val accesses = itr(formals, 0) (* generate instructions to save all the arguments *)
       fun instr(access, reg) =
         Tree.MOVE(exp access (Tree.TEMP FP), Tree.TEMP reg)
       val instrs = ListPair.map instr (accesses, argRegs)
     in
-      {name=name, formals=formals, locals=ref 0, entree=seq instrs}
+      {name=name, formals=formals, accesses=accesses, locals=ref 0, entree=seq instrs}
     end
 
   fun name(f:frame) = #name f
 
-  fun formalToAcc(escapes:bool, offset:int ref) =
-    if escapes then
-      (!offset = !offset + 1;
-      InFrame(0 - !offset))
-    else
-      InReg(Temp.newTemp())
+  fun formals(f as {name, formals, accesses, locals, entree}) =
+    accesses
 
-  fun formals(f:frame) =
+  fun allocLocal(f:frame) escape =
     let
-      val escacc = ref 0
-      fun formalsAccs[] = []
-        | formalsAccs(h::t) =
-            (escacc := !escacc + 1;
-            formalToAcc(h, escacc) :: formalsAccs(t))
+      val numLocals = #locals f
     in
-      formalsAccs(#formals f)
+      if escape then
+        (!numLocals = !numLocals + 1;
+        InFrame(!numLocals))
+      else
+        InReg(let val t = Temp.newTemp() in print ("making new temp "^Temp.makeString t^" allocLocal\n"); t end)
     end
-
-  fun allocLocal(f:frame) =
-    fn(b) =>
-      let
-        val escacc = #locals f
-      in
-        !escacc = !escacc + 1;
-        formalToAcc(b, escacc)
-      end
 
   fun externalCall(name, args) =
     Tree.CALL(Tree.NAME(Temp.namedLabel name), args)
@@ -113,13 +102,13 @@ struct
       List.foldl enter Temp.Table.empty (ListPair.zip(registerTemps, registers))
     end
 
-  fun procEntryExit1(frame as {name, formals=forms, locals, entree}, body) =
+  fun procEntryExit1(frame as {name, formals=forms, accesses, locals, entree}, body) =
     let
-      val saved = map (fn t => Tree.TEMP t) (RV :: calleeSaves)
+      (* val saved = map (fn t => Tree.TEMP t) (RV :: calleeSaves)
       val temps = map (fn t => exp (allocLocal(frame)(true)) (Tree.TEMP FP)) saved
       val saveRegisters = seq(ListPair.mapEq move (temps, saved))
       val restoreRegisters = seq(ListPair.mapEq move (saved, temps))
-      val body' = seq[saveRegisters, body, restoreRegisters]
+      val body' = seq[saveRegisters, body, restoreRegisters] *)
     in
       Tree.SEQ(entree, body)
     end
@@ -129,7 +118,7 @@ struct
             src=[RV] @ calleeSaves @ specialRegs,
             dst=nil, jump=SOME[]}]
 
-  fun procEntryExit3(frame as {name, formals, locals, entree}, body) =
+  fun procEntryExit3(frame as {name, formals, locals, accesses, entree}, body) =
     let
       val size = ((length formals) + (!locals)) * wordsize
       val space = (size mod 16) + size

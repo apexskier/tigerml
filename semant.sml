@@ -620,9 +620,10 @@ struct
 
               fun checkFunc(((name, params, result, body, pos), formals, resultTy), newLevel) =
                 let
-                  fun addParam((name, ty, escape), venv') =
-                    S.enter(venv', name, E.VarEntry{access=Tr.allocLocal(newLevel)(!escape), ty=ty})
-                  val bodyEnv = foldl addParam recEnv formals
+                  val accesses = Tr.getAccesses newLevel
+                  fun addParam((name, ty, escape), access, venv') =
+                    S.enter(venv', name, E.VarEntry{access=access, ty=ty})
+                  val bodyEnv = ListPair.foldl addParam recEnv (formals, accesses)
                   val {exp=bodyExp, ty=bodyTy} = transExp(bodyEnv, tenv, cenv, body, newLevel, noBreak)
                 in
                   if tyEq(resultTy, bodyTy) then

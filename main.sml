@@ -34,7 +34,7 @@ structure Main = struct
           val _ = print "defined format0\n"
         in
           TextIO.output(out, prolog);
-          app (fn i => TextIO.output(out, format0 i)) instrs'';
+          app (fn i => (print (case i of Assem.OPER{assem, src, dst, jump} => assem | Assem.MOVE{assem, src, dst} => assem | Assem.LABEL{assem, lab} => assem); TextIO.output(out, format0 i))) instrs'';
           TextIO.output(out, epilog);
           print "done applying formatting to instrs'\n";
           print "\n"

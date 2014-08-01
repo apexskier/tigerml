@@ -124,7 +124,7 @@ struct
               (emit(A.MOVE{assem="movq `s0, `d0\n",
                           src=t1, dst=t0});
               emit(A.OPER{assem=assemOper oper ^ " $" ^ Int.toString i ^ ", `d0\n",
-                          src=[], dst=[t0], jump=NONE}))
+                          src=[t1], dst=[t0], jump=NONE}))
         | munchStm(T.MOVE(T.TEMP t0, T.BINOP(oper, T.TEMP t1, T.CONST i))) =
             if t1 = t0 then
               emit(A.OPER{assem=assemOper oper ^ " $" ^ Int.toString i ^ ", `s0 # coalescing a temp to temp + const instruction\n",
@@ -133,7 +133,7 @@ struct
               (emit(A.MOVE{assem="movq `s0, `d0\n",
                           src=t1, dst=t0});
               emit(A.OPER{assem=assemOper oper ^ " $" ^ Int.toString i ^ ", `d0\n",
-                          src=[], dst=[t0], jump=NONE}))
+                          src=[t1], dst=[t0], jump=NONE}))
         | munchStm(T.MOVE(T.TEMP t0, T.BINOP(oper, T.TEMP t1, T.TEMP t2))) =
             if t0 = t1 then
               emit(A.OPER{assem=assemOper oper ^ " `s1, `d0 # coalescing a temp to temp + temp instruction\n",
@@ -143,10 +143,10 @@ struct
                 emit(A.OPER{assem=assemOper oper ^ " `s1, `d0 # coalescing a temp to temp + temp instruction\n",
                             src=[t0, t1], dst=[t0], jump=NONE})
               else
-                (emit(A.MOVE{assem="movq `s0, `d0\n",
-                            src=t1, dst=t0});
-                emit(A.OPER{assem=assemOper oper ^ " `s0, `d0\n",
-                            src=[t2], dst=[t0], jump=NONE}))
+                (emit(A.MOVE{assem="movq `s0, `d0 # src: "^Temp.makeString t2^" dst: "^Temp.makeString t0^"\n",
+                            src=t2, dst=t0});
+                emit(A.OPER{assem=assemOper oper ^ " `s0, `d0 # didn't coalesce src: "^Temp.makeString t1^" dst: "^Temp.makeString t0^"\n",
+                            src=[t1, t0], dst=[t0, t2], jump=NONE}))
         | munchStm(T.MOVE(T.TEMP t, T.CONST i)) =
             emit(A.OPER{assem="movq $" ^ Int.toString i ^ ", `d0\n",
                         src=nil,

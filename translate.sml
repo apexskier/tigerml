@@ -13,6 +13,7 @@ sig
   val newLevel : {parent:level, name:Temp.label, formals:bool list} -> level
   val formals : level -> Frame.access list
   val allocLocal : level -> bool -> access
+  val getAccesses : level -> access list
 
   val unEx : exp -> Tree.exp
   val unNx : exp -> Tree.stm
@@ -86,6 +87,12 @@ struct
        | Level({frame, parent}, _) =>
         (fn(g) =>
           (level, F.allocLocal(frame)(g)))
+
+  fun getAccesses(level) =
+    case level
+      of Outer =>
+        raise Fail "Allocating locals at outermost level"
+       | Level({frame=frame as {name, formals, accesses, locals, entree}, parent}, _) => map (fn a => (level, a)) (tl accesses)
 
   (* Utilities *)
   val emptyEx = Ex(T.CONST 0)
