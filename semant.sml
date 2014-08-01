@@ -581,7 +581,9 @@ struct
               fun basicFunDec({name, params, result, body, pos}, (funcs, venv, levels)) =
                 let
                   val label = Temp.newLabel()(* DEBUG: Temp.namedLabel(Symbol.name name) *)
-                  val newLevel = Tr.newLevel{parent=level, name=label, formals=map (fn(_)=>true) params}
+                  fun getEscape{name, escape, typ, pos} =
+                    !escape
+                  val newLevel = Tr.newLevel{parent=level, name=label, formals=map getEscape params}
                   val resultTy =
                     case result
                       of SOME(s, _) =>
