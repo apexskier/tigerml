@@ -91,7 +91,9 @@ struct
       val degree = ref nodeMap.empty:int nodeMap.map ref (* an array containing the current degree of each node *)
       val moveList = ref nodeMap.empty:moveSet.set nodeMap.map ref  (* a mapping from a node to the list of moves it is associated with *)
       val alias = ref nodeMap.empty (* when a move (u, v) has been coalesced, and v put in coalescedNodes, then alias(v) = u *)
-      val colors = ref nodeMap.empty
+      val colors = ref (foldl nodeMap.insert' nodeMap.empty (map (fn n => (print ("precoloring '"^T.makeString n^"'\n"); (n, 123))) F.colorables))
+
+      val instructions = ref instrs:Assem.instr list ref
 
       val control = ref (FG.newGraph())
       val def = ref FGT.empty
@@ -110,7 +112,7 @@ struct
       fun livenessAnalysis() =
         let
           val _ = print "\n## Control flow graph\n"
-          val (cfGraph', cfNodes') = MakeGraph.instrs2graph(instrs)
+          val (cfGraph', cfNodes') = MakeGraph.instrs2graph(!instructions)
 
           val Flow.FGRAPH{control=control', def=def', use=use', ismove=ismove'} = cfGraph'
           val _ = Flow.show(TextIO.stdOut, cfGraph')
@@ -147,11 +149,6 @@ struct
 
           print "done with liveness analysis\n"
         end
-
-      (* val (allocation, temps) = Color.color{interference=igraph,
-                                            initial=F.tempMap,
-                                            spillCost=(fn _ => 1),
-                                            registers=F.registers} *)
 
       val k:int = length F.colorables
 
@@ -463,7 +460,12 @@ struct
             val okColors = ref (intSet.addList(intSet.empty, (map (fn x=>x-1) (List.tabulate(k, fn x => x+1)))))
             fun forall(w) =
               if nodeSet.member((nodeSet.union(!coloredNodes, !precolored)), getAlias(w)) then
-                okColors := intSet.delete(!okColors, valOf(nodeMap.find(!colors, getAlias w), "417"))
+                let
+                  val a = valOf(nodeMap.find(!colors, getAlias w), "417")
+                in
+                  okColors := intSet.delete(!okColors, a)
+                  handle NotFound => print (T.makeString a ^ " not found in assignColors\n")
+                end
               else ()
           in
             nodeSet.app forall (valOf(nodeMap.find(!adjList, n), "420"));
@@ -483,24 +485,65 @@ struct
       and rewriteProgram() =
         let
           val _ = print "enter rewriteProgram\n"
-          val newTemps = map (fn _ => T.newTemp()) (nodeSet.listItems(!spilledNodes))
+          fun foreachSpill(node:FG.node, newtemps':nodeSet.set) =
+            let
+              val access = F.allocLocal(frame)(true)
+              val defs = getDef(node)
+              val uses = getUse(node)
+              fun idx(item, ls) =
+                let
+                  fun idx'(m, nil) = 0
+                    | idx'(m, h::t) = if FG.eq(h, item) then m else idx'(m+1, t)
+                in
+                  idx'(0, ls)
+                end
+              fun insertInstr(instrs, node, bfr:bool) =
+                let
+                  val nodeIdx = idx(!tnode node, !cfNodes) - (if bfr then 1 else 0)
+                  val newnodes = List.map (fn _ => FG.newNode(!control)) instrs
+                in
+                  cfNodes := (List.take(!cfNodes, nodeIdx)) @ newnodes @ (List.drop(!cfNodes, nodeIdx));
+                  print "inserting some instructions\n";
+                  instructions := (List.take(!instructions, nodeIdx)) @ instrs @ (List.drop(!instructions, nodeIdx))
+                end
+              fun forEachDef(var, newtemps) =
+                let
+                  val newtemp = T.newTemp()
+                  val tree = Tree.MOVE(Tree.TEMP newtemp, F.exp(access)(Tree.TEMP F.FP))
+                  val instrs = Amd64Codegen.codegen frame tree
+                in
+                  insertInstr(instrs, var, false);
+                  nodeSet.add(newtemps, newtemp)
+                end
+              fun forEachUse(var, newtemps) =
+                let
+                  val newtemp = T.newTemp()
+                  val tree = Tree.MOVE(F.exp(access)(Tree.TEMP F.FP), Tree.TEMP newtemp)
+                  val instrs = Amd64Codegen.codegen frame tree
+                in
+                  insertInstr(instrs, var, true);
+                  nodeSet.add(newtemps, newtemp)
+                end
+            in
+              nodeSet.foldl forEachDef (nodeSet.foldl forEachUse newtemps' uses) defs
+            end
+          val newTemps = List.foldl foreachSpill nodeSet.empty (List.map (fn t => !tnode t) (nodeSet.listItems(!spilledNodes)))
         in
-        (*
+        (* TODO:
         * Allocate memory locations for each v in spilledNodes.
         * Create a new temporary vi for each definition and each use.
         * In the program (instructions), insert a store after each definition of a vi, a fetch before each use of a vi.
-        * val _ = print "enter each\n"
         * Put all the vi into a set newTemps.
         * *)
           spilledNodes := nodeSet.empty;
-          initial := nodeSet.union(!coloredNodes, nodeSet.addList(!coalescedNodes, newTemps));
+          initial := nodeSet.union(!coloredNodes, nodeSet.union(!coalescedNodes, newTemps));
           coloredNodes := nodeSet.empty;
           coalescedNodes := nodeSet.empty;
           print "exit rewriteProgram\n"
         end
     in
       main();
-      (instrs, !allocation')
+      (!instructions, !allocation')
     end
 end
 
