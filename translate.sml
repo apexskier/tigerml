@@ -283,16 +283,13 @@ struct
                   (unCx el)(t, f),
                   T.LABEL finLab])
          | (a, b) =>
-          (print "a:\n"; Printtree.printtree(TextIO.stdOut, unNx a);
-          print "b:\n"; Printtree.printtree(TextIO.stdOut, unNx b);
-          (* error "illegal: incompatable then and else")*)
-          Nx(seq[(testCx)(thLab, elLab),
-                 T.LABEL thLab,
-                 unNx th,
-                 T.JUMP(T.NAME finLab, [finLab]),
-                 T.LABEL elLab,
-                 unNx el,
-                 T.LABEL finLab]))
+          Ex(T.ESEQ(seq[(testCx)(thLab, elLab),
+                        T.LABEL thLab,
+                        T.MOVE(T.TEMP r, unEx th),
+                        T.JUMP(T.NAME finLab, [finLab]),
+                        T.LABEL elLab,
+                        T.MOVE(T.TEMP r, unEx el),
+                        T.LABEL finLab], T.TEMP r))
     end
 
   and ifThenExp(test, th) =
