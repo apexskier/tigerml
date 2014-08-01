@@ -166,8 +166,7 @@ struct
            | A.TimesOp => T.MUL
            | A.DivideOp => T.DIV
            | _ =>
-               (error "impossible" (* TODO: use errormessage.impossible *);
-               T.PLUS)
+               ErrorMsg.impossible "non-arithmetic operator"
     in
       Ex(T.BINOP(oper', unEx left, unEx right))
     end
@@ -195,8 +194,7 @@ struct
            | A.GtOp => T.GT
            | A.GeOp => T.GE
            | _ =>
-               (error "impossible" (* TODO: use errormessage.impossible *);
-               T.EQ)
+               ErrorMsg.impossible "non-comparison operator"
       val cx =
         fn(t, f) =>
           T.CJUMP(oper', unEx left, unEx right, t, f)
@@ -218,8 +216,7 @@ struct
            | A.GtOp => "strGt"
            | A.GeOp => "strGe"
            | _ =>
-               (error "impossible" (* TODO: use errormessage.impossible *);
-               "")
+               ErrorMsg.impossible "non-comparison operator when comparing strings"
     in
       Ex(F.externalCall(oper', [unEx left, unEx right]))
     end
