@@ -131,7 +131,7 @@ struct
                         id = getSym field)
                     in
                       case List.find matchField fields
-                        of SOME(s, ty) => {exp=Tr.fieldVar{var=varExp, pos=(!fpos)}, ty=ty}
+                        of SOME(s, ty) => {exp=Tr.fieldVar{var=varExp, pos=(!fpos - 1)}, ty=ty}
                          | NONE => (
                             error pos ("record field '" ^ S.name id ^ "' not found");
                             errExpty)

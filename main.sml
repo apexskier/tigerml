@@ -10,7 +10,6 @@ structure Main = struct
         let
           val body' = F.procEntryExit1(frame, body)
           val _ = print (Symbol.name(F.name frame) ^ ":\n")
-          val _ = TextIO.output(out, Symbol.name(F.name frame) ^ ":\n")
           val blocks = Canon.basicBlocks(Canon.linearize body')
           val stms = Canon.traceSchedule(blocks)
           val _ = app (fn s => Printtree.printtree(TextIO.stdOut, s)) stms

@@ -6,6 +6,7 @@ main:
 
 run:
 	sml @SMLload $(EXEC).$(ARCH) test.tig && cat test.tig.s
+	gcc -g runtime.c test.tig.s
 
 clean:
 	rm -f tiger.lex.* tiger.grm.* tigerml.* *.$(ARCH)

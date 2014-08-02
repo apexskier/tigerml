@@ -296,6 +296,7 @@ struct
           of SOME(t) => t
            | NONE => ErrorMsg.impossible ("temp -> node '" ^ G.nodename node ^ "' not found")
     in
+      app (fn (n1, n2) => print (T.makeString(gTemp n1) ^ " moves to " ^ T.makeString(gTemp n2) ^ "\n")) moves;
       (IGRAPH{graph=iGraph,
               tnode=tnode,
               gtemp=gTemp,

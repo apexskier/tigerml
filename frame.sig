@@ -30,6 +30,7 @@ sig
 
   (* private to all but amd64frame *)
   val callerSaves : Temp.temp list
+  val calleeSaves : Temp.temp list
   val argRegs : Temp.temp list
   val colorables : Temp.temp list
 end

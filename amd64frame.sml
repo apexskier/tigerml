@@ -92,7 +92,9 @@ struct
 
   (* Put a string in memory with a label refering to it *)
   fun string (label, str) =
-    (Symbol.name label ^ ": .string \"" ^ str ^ "\"\n.text\n")
+    (Symbol.name label ^ ":\n" ^
+    "\t.long " ^ Int.toString(String.size str) ^"\n" ^
+    "\t.string \"" ^ String.toCString str ^ "\"\n.text\n")
 
   val tempMap =
     let
@@ -126,24 +128,24 @@ struct
       {prolog="\t.text\n" ^
               "\t.globl " ^ Symbol.name name ^ "\n" ^
               Symbol.name name ^ ":\n" ^
-              "pushq %rbx\n" ^
-              "pushq %r12\n" ^
-              "pushq %r14\n" ^
-              "pushq %r13\n" ^
-              "pushq %r14\n" ^
-              "pushq %r15\n" ^
-              "pushq %rbp\n" ^
-              "movq %rsp, %rbp\n" ^
-              "sub $" ^ Int.toString space ^ ", %rsp\n",
+              "pushq \t%rbx\n" ^
+              "pushq \t%r12\n" ^
+              "pushq \t%r14\n" ^
+              "pushq \t%r13\n" ^
+              "pushq \t%r14\n" ^
+              "pushq \t%r15\n" ^
+              "pushq \t%rbp\n" ^
+              "movq \t%rsp, %rbp\n" ^
+              "sub \t$" ^ Int.toString space ^ ", %rsp\n",
        body=body,
-       epilog="movq %rbp, %rsp\n" ^
-              "popq %rbp\n" ^
-              "popq %r15\n" ^
-              "popq %r14\n" ^
-              "popq %r12\n" ^
-              "popq %r13\n" ^
-              "popq %r14\n" ^
-              "popq %rbx\n" ^
+       epilog="movq \t%rbp, %rsp\n" ^
+              "popq \t%rbp\n" ^
+              "popq \t%r15\n" ^
+              "popq \t%r14\n" ^
+              "popq \t%r12\n" ^
+              "popq \t%r13\n" ^
+              "popq \t%r14\n" ^
+              "popq \t%rbx\n" ^
               "ret\n"}
     end
 end

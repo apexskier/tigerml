@@ -188,7 +188,16 @@ struct
     Nx(T.JUMP(T.NAME(lab), [lab]))
 
   and callExp{name, level, funLevel, args} =
-    Ex(T.CALL(T.NAME name, staticLink(level, funLevel) :: List.map unEx args))
+    let
+      val predefs = ["print", "flush", "getchar", "ord", "chr", "size", "substring", "concat", "not", "exit"]
+      val nameStr = Symbol.name name
+      fun eq(a) = a = nameStr
+    in
+      if List.exists eq predefs then
+        Ex(T.CALL(T.NAME name, List.map unEx args))
+      else
+        Ex(T.CALL(T.NAME name, staticLink(level, funLevel) :: List.map unEx args))
+    end
 
   and compareIntExp{oper, left, right} =
     let
@@ -348,15 +357,15 @@ struct
   and recordExp(fields) =
     let
       val l = Temp.newTemp()
-      fun insertField(field, i) =
-        T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP l, T.CONST(F.wordsize * i))), unEx field)
-      fun initField(field, (tree, i)) =
-        (T.SEQ(insertField(field, i), tree), (i + 1))
+      val i = ref 0
+      fun insertField(field) =
+        (i := !i + 1;
+        T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP l, T.CONST(F.wordsize * (!i-1)))), unEx field))
       val size = length fields * F.wordsize
-      val (fieldsTree, _) = foldl initField (insertField(hd fields, 0), 1) (tl fields)
+      val (fieldsTree) = seq(map insertField fields)
     in
       Ex(T.ESEQ(T.SEQ(T.MOVE(T.TEMP l,
-                             F.externalCall("initSpace", [T.CONST size])),
+                             F.externalCall("allocRecord", [T.CONST size])),
                       fieldsTree),
                 T.TEMP l))
     end
