@@ -189,7 +189,7 @@ struct
 
   and callExp{name, level, funLevel, args} =
     let
-      val predefs = ["print", "flush", "getchar", "ord", "chr", "size", "substring", "concat", "not", "exit"]
+      val predefs = ["print", "printint", "flush", "getchar", "ord", "chr", "size", "substring", "concat", "not", "exit"]
       val nameStr = Symbol.name name
       fun eq(a) = a = nameStr
     in
@@ -252,7 +252,7 @@ struct
         fn(t, f) =>
           T.CJUMP(T.GE, unEx var, unEx hi, t, f)
     in
-      Nx(seq[T.MOVE(unEx lo, unEx var),
+      Nx(seq[T.MOVE(unEx var, unEx lo),
              (testCx)(finLab, bodyLab),
              T.LABEL bodyLab,
              unNx body,

@@ -42,6 +42,10 @@ void print(struct string *s) {
     for (i = 0; i < s->length; i++, p++) putchar(*p);
 }
 
+void printint(int i) {
+    printf("%d", i);
+}
+
 void flush() {
     fflush(stdout);
 }

@@ -35,10 +35,14 @@ struct
                     S.symbol("string"), T.STRING),
                     S.symbol("Object"), T.CLASS(S.symbol("Object"), NONE, ref ()))
 
-  val base_venv = S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.empty,
+  val base_venv = S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.enter(S.empty,
                     S.symbol("print"),    FunEntry{level=Tr.outermost,
                                                    label=Temp.namedLabel "print",
                                                    formals=[T.STRING],
+                                                   result=T.UNIT}),
+                    S.symbol("printint"),    FunEntry{level=Tr.outermost,
+                                                   label=Temp.namedLabel "printint",
+                                                   formals=[T.INT],
                                                    result=T.UNIT}),
                     S.symbol("flush"),    FunEntry{level=Tr.outermost,
                                                    label=Temp.namedLabel "flush",

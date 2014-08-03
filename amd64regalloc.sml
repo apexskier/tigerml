@@ -68,7 +68,7 @@ struct
 
   fun alloc(instrs, frame) =
     let
-      val k:int = length F.colorables
+      val k:int = length F.registerTemps
 
       (* Node work-lists, sets, and stacks.
       * The following lists and sets are always mutually disjoint and every
@@ -101,7 +101,7 @@ struct
       val initokColors = (map (fn x=>x-1) (List.tabulate(k, fn x => x+1)))
       val colors = ref (foldl nodeMap.insert'
                               nodeMap.empty
-                              (ListPair.zip(F.colorables, initokColors)))
+                              (ListPair.zip(F.registerTemps, initokColors)))
 
       val instructions = ref instrs:Assem.instr list ref
 
@@ -226,9 +226,11 @@ struct
             end
 
         in
-          moveList := (foldl nodeMap.insert' nodeMap.empty (map (fn n => (gtemp' n, moveSet.empty)) (IG.nodes graph')));
-          adjList := (foldl nodeMap.insert' nodeMap.empty (map (fn n => (n, nodeSet.addList(nodeSet.empty, map gtemp' (IG.adj(tnode' n))))) (nodeSet.listItems(initial'))));
-          degree := (foldl nodeMap.insert' nodeMap.empty (map getdegree (IG.nodes graph')));
+          moveList := foldl nodeMap.insert' nodeMap.empty (map (fn n => (gtemp' n, moveSet.empty)) (IG.nodes graph'));
+          adjList := foldl nodeMap.insert' nodeMap.empty (map (fn n => (n, nodeSet.addList(nodeSet.empty, map gtemp' (IG.adj(tnode' n))))) (nodeSet.listItems(initial')));
+          degree := foldl nodeMap.insert' nodeMap.empty (map getdegree (IG.nodes graph'));
+          colors := foldl nodeMap.insert' nodeMap.empty (ListPair.zip(F.registerTemps, initokColors));
+          app (fn (r, c) => print ("register " ^ T.makeString r ^ " given color " ^ Int.toString c ^ "\n")) (ListPair.zip(F.registerTemps, initokColors));
 
           control := control';
           def := def';
@@ -581,14 +583,18 @@ struct
             fun forall(w) =
               if nodeSet.member((nodeSet.union(!coloredNodes, !precolored)), getAlias w) then
                 let
-                  val a = valOf(nodeMap.find(!colors, getAlias w), "417")
+                  val _ = print "a\n"
+                  val a = valOf(nodeMap.find(!colors, getAlias w), "417") handle NotFound => ErrorMsg.impossible(T.makeString(getAlias w) ^ " has no color")
+                  val _ = print "b\n"
                 in
                   okColors := intSet.delete(!okColors, a)
                   handle NotFound => print (T.makeString a ^ " not found in assignColors\n")
                 end
               else ()
           in
+            print ("Doing " ^ T.makeString n ^ "\n");
             nodeSet.app forall (valOf(nodeMap.find(!adjList, n), "420") handle NotFound => nodeSet.empty);
+            print "test\n";
             if intSet.isEmpty(!okColors) then
               (spilledNodes := nodeSet.add(!spilledNodes, n);
               print ("spilling " ^ T.makeString n ^ "\n"))
