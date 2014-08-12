@@ -251,13 +251,16 @@ struct
       val testCx =
         fn(t, f) =>
           T.CJUMP(T.GE, unEx var, unEx hi, t, f)
+      val testCx' =
+        fn(t, f) =>
+          T.CJUMP(T.LE, unEx var, unEx hi, t, f)
     in
       Nx(seq[T.MOVE(unEx var, unEx lo),
              (testCx)(finLab, bodyLab),
              T.LABEL bodyLab,
              unNx body,
-             T.EXP(T.BINOP(T.PLUS, unEx var, T.CONST 1)),
-             (testCx)(finLab, bodyLab),
+             unNx(assignExp(var, arithExp{oper=A.PlusOp, left=var, right=Ex(T.CONST 1)})),
+             (testCx')(finLab, bodyLab),
              T.LABEL finLab])
     end
 
@@ -452,7 +455,8 @@ struct
           val tree =
             if returns then
               T.MOVE(T.TEMP F.RV, unEx body)
-            else unNx body
+            else
+              T.SEQ(unNx body, T.MOVE(T.TEMP F.RV, T.CONST 0))
         in
           fragments := F.PROC{body=tree,
                               frame=frame} :: !fragments
