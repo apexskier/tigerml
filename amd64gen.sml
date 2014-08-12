@@ -231,7 +231,7 @@ struct
             in
               (result(fn r => emit(A.OPER{assem="call \t" ^ S.name n ^ "\n",
                                          src=args,
-                                         dst=F.RV::F.callerSaves@F.argRegs, jump=NONE}));
+                                         dst=F.RV::F.callerSaves, jump=NONE}));
               F.RV)
             end
         | munchExp(T.CALL(e, args)) =

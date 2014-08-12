@@ -33,10 +33,10 @@ struct
       val compare = Int.compare
     end)
 
-  fun format(t) =
+  fun format t =
     case T.Table.look(Amd64Frame.tempMap, t)
-      of SOME(s) => "%" ^ s
-       | NONE => T.makeString(t)
+      of SOME s => "%" ^ s
+       | NONE => T.makeString t
 
   datatype igraph = IGRAPH of {graph:G.graph,
                                tnode:T.temp -> G.node,
@@ -61,39 +61,42 @@ struct
           genLiveSet(TT.empty, nil, liveTemps)
         end
 
-      val fgNodes = G.nodes(control)
+      val fgNodes = G.nodes control
 
       val graphMoves = nil:(G.node * G.node) list
       val iGraph = G.newGraph()
 
       (* Create nodes in the interference graph for each variable defined in
         * the control flow graph. Save them in some lookup tables. *)
-      fun genINodes(h::t:FG.node list, (nodesMap, tempsMap)) =
+      fun genINodes(h::t:FG.node list, (nodesMap, tempsMap, cf2igMap)) =
             let
-              fun processVarsFrom(table, (nodesMap', tempsMap')) =
+              val _ = print ("generating " ^ FG.nodename h ^ "\n")
+              fun processVarsFrom(table, (nodesMap', tempsMap', cf2igMap')) =
                 case FGT.look(table, h)
                   of SOME vars =>
                     let
-                      fun enter(var:T.temp, (nodesMap'', tempsMap'')) =
+                      fun enter(var:T.temp, (nodesMap'', tempsMap'', cf2igMap'')) =
                         case TT.look(nodesMap'', var)
-                          of SOME node => (nodesMap'', tempsMap'')
+                          of SOME node => (nodesMap'', tempsMap'', cf2igMap'')
                            | NONE =>
                             let
-                              val node = G.newNode(iGraph)
+                              val _ = print ("           " ^ FG.nodename h ^ " -> " ^ T.makeString var ^ "\n")
+                              val node = G.newNode iGraph
                             in
                               (TT.enter(nodesMap'', var, node),
-                               GT.enter(tempsMap'', node, var))
+                               GT.enter(tempsMap'', node, var),
+                               FGT.enter(cf2igMap'', h, node))
                             end
                     in
-                      foldl enter (nodesMap', tempsMap') vars
+                      foldl enter (nodesMap', tempsMap', cf2igMap') vars
                     end
-                   | NONE => (nodesMap', tempsMap')
+                   | NONE => (nodesMap', tempsMap', cf2igMap')
             in
-              genINodes(t, foldl processVarsFrom (nodesMap, tempsMap) [def, use])
+              genINodes(t, foldl processVarsFrom (nodesMap, tempsMap, cf2igMap) [def, use])
             end
-        | genINodes(nil, (nodesMap, tempsMap)) = (nodesMap, tempsMap)
+        | genINodes(nil, (nodesMap, tempsMap, cf2igMap)) = (nodesMap, tempsMap, cf2igMap)
 
-      val (iGraphNodes, iGraphTemps) = genINodes(fgNodes, (TT.empty, GT.empty))
+      val (iGraphNodes, iGraphTemps, cf2igMap) = genINodes(fgNodes, (TT.empty, GT.empty, FGT.empty))
 
       fun valOf(tbl, object) =
         case TT.look(tbl, object)
@@ -106,6 +109,11 @@ struct
         in
           makeSet(valOf(tbl, n))
         end
+
+      fun convCFtoIG(n:FG.node) =
+        case FGT.look(cf2igMap, n)
+          of SOME node => node
+           | NONE => ErrorMsg.impossible ("ig node not found for cf node '" ^ FG.nodename n ^ "'")
 
       fun tnode(t:T.temp):G.node =
         case TT.look(iGraphNodes, t)
@@ -127,13 +135,13 @@ struct
               fun unionIn(node':G.node, outs:tempSet.set) =
                 let
                   val i = ref 0
-                  fun tr(nodes) =
-                    if FG.eq(node, hd nodes) then
+                  fun tr nodes =
+                    if FG.eq(node', hd nodes) then
                       !i
                     else
                       (i := !i + 1;
                       tr(tl nodes))
-                  val n = tr(fgNodes)
+                  val n = tr fgNodes
                 in
                   tempSet.union(outs, List.nth(inLives, n))
                 end
@@ -141,30 +149,23 @@ struct
               (tempSet.union(lookSet(use, node),
                              tempSet.difference(outLive,
                                                 lookSet(def, node))),
-              foldl unionIn outLive (G.succ(node)))
+              foldl unionIn outLive (G.succ node))
             end
 
           val nodesLives = ListPair.zip(fgNodes, ListPair.zip(inLives, outLives))
 
           val inouts = map each nodesLives
-          val (inLives', outLives') = ListPair.unzip(inouts)
+          val (inLives', outLives') = ListPair.unzip inouts
 
-          (* DEBUG:
+          (* DEBUG: *)
           fun printstuff(n, (inl, outl)) =
-            let
-              fun printstuff'(t) =
-                print ("fg node '"^FG.nodename n^"' has in temp '"^format t^"'\n")
-              fun printstuff''(t) =
-                print ("fg node '"^FG.nodename n^"' has out temp '"^format t^"'\n")
-            in
-              app printstuff' (tempSet.listItems inl);
-              app printstuff'' (tempSet.listItems outl)
-            end
+            (print ("fg node '"^FG.nodename n^"' ins = " ^ (ListFormat.listToString format (tempSet.listItems inl)) ^ "\n");
+            print ("fg node '"^FG.nodename n^"' outs = " ^ (ListFormat.listToString format (tempSet.listItems outl)) ^ "\n"))
 
           val _ = print "originals\n"
           val _ = app printstuff (ListPair.zip(fgNodes, ListPair.zip(inLives, outLives)))
           val _ = print "newones\n"
-          val _ = app printstuff (ListPair.zip(fgNodes, ListPair.zip(inLives', outLives'))) *)
+          val _ = app printstuff (ListPair.zip(fgNodes, ListPair.zip(inLives', outLives')))
 
           fun listcomp(i1:tempSet.set, i2:tempSet.set):bool =
             let
@@ -196,7 +197,7 @@ struct
                                                                               outLives)))
 
 
-      fun getOutLives(n) =
+      fun getOutLives n =
         tempSet.listItems(case FGT.look(outLiveMaps, n)
                             of SOME l => l
                              | NONE => ErrorMsg.impossible ("node '" ^ FG.nodename n ^ "' liveOut not found"))
@@ -205,12 +206,12 @@ struct
       (* fun calcIn(node:G.node):tempSet.set =
         (print ("in calcIn for node '"^G.nodename node^"'\n");
         case FGT.look(inLiveMap, node)
-          of SOME(temps) => temps
+          of SOME temps => temps
            | NONE =>
             let
               val temps = if G.nodename node = "n0" then lookSet(use, node) (* TODO: figure out this infinite loop *)
                           else tempSet.union(lookSet(use, node),
-                                        tempSet.difference(calcOut(node),
+                                        tempSet.difference(calcOut node)
                                                            lookSet(def, node)))
             in
               FGT.enter(inLiveMap, node, temps); (* !! Here's the issue *)
@@ -224,10 +225,10 @@ struct
             tempSet.union(outs, calcIn(node')))
         in
           case FGT.look(outLiveMap, node)
-            of SOME(temps) => temps
+            of SOME temps => temps
              | NONE =>
               let
-                val temps = foldl unionIn tempSet.empty (G.succ(node))
+                val temps = foldl unionIn tempSet.empty (G.succ node)
               in
                 FGT.enter(outLiveMap, node, temps);
                 temps
@@ -235,30 +236,39 @@ struct
         end
 
       fun outList(node:G.node):T.temp list =
-        tempSet.listItems(calcOut(node)) *)
+        tempSet.listItems(calcOut node) *)
 
       fun genIGraph(h::t:FG.node list, moves) =
             let
               val outs = getOutLives(h)
               val (g, n) = h
+              fun conv t =
+                let val t' = gtemp t
+                in
+                  case TT.look(Amd64Frame.tempMap, t')
+                    of SOME s => "%" ^ s
+                     | NONE => T.makeString t'
+                end handle NotFound => "notfound"
             in
               if case FGT.look(ismove, h)
-                   of SOME(b) => b
+                   of SOME b => b
                     | NONE => ErrorMsg.impossible "node ismove not found" then
                 let
                   val a = tnode(
                     case FGT.look(def, h)
-                      of SOME(t) => if length t > 1 then ErrorMsg.impossible "more than one destination in move" else hd t
+                      of SOME t => if length t > 1 then ErrorMsg.impossible "more than one destination in move" else hd t
                        | NONE => ErrorMsg.impossible "destination not found in move CF node")
                   val c = tnode(
                     case FGT.look(use, h)
-                      of SOME(t) => if length t > 1 then ErrorMsg.impossible "more than one source in move" else hd t
+                      of SOME t => if length t > 1 then ErrorMsg.impossible "more than one source in move" else hd t
                        | NONE => ErrorMsg.impossible "source not found in move CF node")
-                  fun addEdge(b) =
-                    let val b' = tnode(b)
+                  fun addEdge b =
+                    let val b' = tnode b
                     in
                       if G.eq(b', c) then ()
-                      else G.mk_edge{from=a, to=b'}
+                      else
+                        (print ("**making edge from " ^ conv a ^ " to " ^ conv b' ^ "\n");
+                        G.mk_edge{from=a, to=b'})
                     end
                 in
                   app addEdge outs;
@@ -268,15 +278,19 @@ struct
                 (case TT.look(def, n)
                   of SOME vars =>
                     let
+                      val _ = print ("examining " ^ FG.nodename h ^ "\n")
                       fun mkedges(var:T.temp) =
                         let
-                          val varNode = tnode(var)
+                          val varNode = tnode var
+                          val _ = print ("  " ^ T.makeString var ^ "\n")
                           fun mkedges'(out:T.temp) =
                             let
-                              val outNode = tnode(out)
+                              val liveNode = tnode out
                             in
-                              if G.eq(varNode, outNode) orelse G.isAdj(varNode, outNode) then ()
-                              else G.mk_edge{from=varNode, to=outNode}
+                              if G.eq(varNode, liveNode) orelse G.isAdj(varNode, liveNode) then ()
+                              else
+                                (print ("  making edge from " ^ conv varNode ^ " to " ^ conv liveNode ^ "\n");
+                                G.mk_edge{from=varNode, to=liveNode})
                             end
                         in
                           app mkedges' outs
@@ -285,7 +299,7 @@ struct
                       app mkedges vars
                     end
                    | NONE => ();
-              genIGraph(t, moves))
+                genIGraph(t, moves))
             end
         | genIGraph(nil, moves) = moves
 
@@ -293,10 +307,20 @@ struct
 
       fun gTemp(node:G.node):T.temp =
         case GT.look(iGraphTemps, node)
-          of SOME(t) => t
+          of SOME t => t
            | NONE => ErrorMsg.impossible ("temp -> node '" ^ G.nodename node ^ "' not found")
+      fun conv t =
+        let val t' = gTemp t
+        in
+          case TT.look(Amd64Frame.tempMap, t')
+            of SOME s => "%" ^ s
+             | NONE => T.makeString(t')
+        end
     in
-      app (fn (n1, n2) => print (T.makeString(gTemp n1) ^ " moves to " ^ T.makeString(gTemp n2) ^ "\n")) moves;
+      app
+      (fn (n1, n2) =>
+        print (conv n1 ^ " moves to " ^ conv n2 ^ "\n"))
+      moves;
       (IGRAPH{graph=iGraph,
               tnode=tnode,
               gtemp=gTemp,
@@ -307,8 +331,8 @@ struct
     let
       val nodeList = G.nodes graph
       val nodeStrings = (fn n => (format (gtemp n)))
-      fun nodeStr(n) =
-        nodeStrings n ^ " --> " ^ (String.concatWith ", " (map nodeStrings (G.adj(n))))
+      fun nodeStr n =
+        nodeStrings n ^ " --> " ^ (String.concatWith ", " (map nodeStrings (G.adj n)))
     in
       TextIO.output(out, String.concatWith "\n" (map nodeStr nodeList) ^ "\n")
     end

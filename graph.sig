@@ -20,5 +20,5 @@ sig
   structure Table : TABLE
   sharing type Table.key = node
 
-  val nodename: node->string  (* for debugging only *)
+  val nodename: node -> string  (* for debugging only *)
 end

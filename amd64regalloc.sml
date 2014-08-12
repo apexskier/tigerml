@@ -68,7 +68,7 @@ struct
 
   fun alloc(instrs, frame) =
     let
-      val k:int = length F.registerTemps
+      val k:int = length F.colorables
 
       (* Node work-lists, sets, and stacks.
       * The following lists and sets are always mutually disjoint and every
@@ -98,7 +98,7 @@ struct
       val degree = ref nodeMap.empty:int nodeMap.map ref (* an array containing the current degree of each node *)
       val moveList = ref nodeMap.empty:moveSet.set nodeMap.map ref  (* a mapping from a node to the list of moves it is associated with *)
       val alias = ref nodeMap.empty (* when a move (u, v) has been coalesced, and v put in coalescedNodes, then alias(v) = u *)
-      val initokColors = (map (fn x=>x-1) (List.tabulate(k, fn x => x+1)))
+      val initokColors = (map (fn x=>x-1) (List.tabulate(length F.registerTemps, fn x => x+1)))
       val colors = ref (foldl nodeMap.insert'
                               nodeMap.empty
                               (ListPair.zip(F.registerTemps, initokColors)))
@@ -200,6 +200,23 @@ struct
           val Liveness.IGRAPH{graph=graph', tnode=tnode', gtemp=gtemp', moves=moves'} = igraph'
           val _ = Liveness.show(TextIO.stdOut, igraph')
 
+          val _ = print "\n### Live outs\n"
+          val _ =
+            let
+              fun conv(t) =
+                case TT.look(Amd64Frame.tempMap, t)
+                  of SOME(s) => "%" ^ s
+                   | NONE => T.makeString(t)
+              fun printOuts(t) =
+                let
+                  val outs = getOuts'(t)
+                in
+                  print (conv (gtemp' t) ^ ": " ^ (ListFormat.listToString conv outs) ^ "\n")
+                end
+            in
+              app printOuts (IG.nodes(graph'))
+            end
+
           val allTemps = nodeSet.addList(nodeSet.empty, map gtemp' (IG.nodes graph'))
           val initial' = nodeSet.difference(allTemps, !precolored);
 
@@ -221,7 +238,6 @@ struct
                 if nodeSet.member(!precolored, gtemp' n) then valOf(Int.maxInt, "221")
                 else length(IG.adj n)
             in
-              print ("setting initial degree of temp '"^T.makeString(gtemp' n)^"' to " ^ Int.toString(deg) ^"\n");
               (gtemp' n, deg)
             end
 
@@ -230,7 +246,6 @@ struct
           adjList := foldl nodeMap.insert' nodeMap.empty (map (fn n => (n, nodeSet.addList(nodeSet.empty, map gtemp' (IG.adj(tnode' n))))) (nodeSet.listItems(initial')));
           degree := foldl nodeMap.insert' nodeMap.empty (map getdegree (IG.nodes graph'));
           colors := foldl nodeMap.insert' nodeMap.empty (ListPair.zip(F.registerTemps, initokColors));
-          app (fn (r, c) => print ("register " ^ T.makeString r ^ " given color " ^ Int.toString c ^ "\n")) (ListPair.zip(F.registerTemps, initokColors));
 
           control := control';
           def := def';
@@ -311,7 +326,10 @@ struct
                  | NONE => ErrorMsg.impossible "register not found"
             val colorableStrs = map transformRegTemp F.colorables
             fun enterAlloc(n, t) =
-              TT.enter(t, n, List.nth(colorableStrs, (valOf(nodeMap.find(!colors, n), "193"))))
+              TT.enter(t, n,
+                       List.nth(colorableStrs,
+                                (valOf(nodeMap.find(!colors, n), "193")) ))
+                                  handle NotFound => (print ("issue with " ^ T.makeString n ^ "\n"); t)
           in
             allocation' := nodeSet.foldl enterAlloc F.tempMap (nodeSet.union(!coloredNodes, !coalescedNodes))
           end;
@@ -324,42 +342,44 @@ struct
           fun forall(b) =
             let
               val live = ref(nodeSet.addList(nodeSet.empty, (!getOuts)(b)))
-              fun forall'(i:FG.node) =
-                (if isMove(i) then
-                  let
-                    val toList = nodeSet.listItems(getUse i)
-                    val frList = nodeSet.listItems(getDef i)
-                    val to =
-                      if length toList <> 1 then
-                        ErrorMsg.impossible "move doesn't have one to"
-                      else hd toList
-                    val fr =
-                      if length frList <> 1 then
-                        ErrorMsg.impossible "move doesn't have one from"
-                      else hd frList
-                    val mv = (to, fr)
-                    fun forall''(n) =
-                      moveList := nodeMap.insert(!moveList, n, moveSet.add(valOf(nodeMap.find(!moveList, n), "217"), mv))
-                  in
-                    live := nodeSet.difference(!live, getUse(i));
-                    nodeSet.app forall'' (nodeSet.union(getDef(i), getUse(i)));
-                    worklistMoves := moveSet.add(!worklistMoves, mv)
-                  end
-                else ();
-                nodeSet.app (fn d => nodeSet.app (fn l => addEdge(l, d)) (!live)) (getDef(i));
-                live := nodeSet.union(getUse(i), nodeSet.difference(!live, getDef(i))))
-            in app forall' ([b]) end
-        in app forall (!cfNodes); print "done building\n" end;
+            in
+              if isMove b then
+                let
+                  val toList = nodeSet.listItems(getUse b)
+                  val frList = nodeSet.listItems(getDef b)
+                  val to =
+                    if length toList <> 1 then
+                      ErrorMsg.impossible "move doesn't have one to"
+                    else hd toList
+                  val fr =
+                    if length frList <> 1 then
+                      ErrorMsg.impossible "move doesn't have one from"
+                    else hd frList
+                  val mv = (to, fr)
+                  fun forall''(n) =
+                    moveList := nodeMap.insert(!moveList, n, moveSet.add(valOf(nodeMap.find(!moveList, n), "217"), mv))
+                in
+                  live := nodeSet.difference(!live, getUse b);
+                  nodeSet.app forall'' (nodeSet.union(getDef b, getUse b));
+                  worklistMoves := moveSet.add(!worklistMoves, mv)
+                end
+              else ();
+              nodeSet.app (fn d => nodeSet.app (fn l => addEdge(l, d)) (!live)) (getDef b);
+              live := nodeSet.union(getUse b, nodeSet.difference(!live, getDef b))
+            end
+        in app forall (!cfNodes) end;
         checkInvariants())
 
       and addEdge(u, v) =
         if not(edgeSet.member(!adjSet, (u, v))) andalso u <> v then
           (adjSet := edgeSet.addList(!adjSet, [(u, v), (v, u)]);
           if not(nodeSet.member(!precolored, u)) then
-            (adjList := nodeMap.insert(!adjList, u, nodeSet.add(valOf(nodeMap.find(!adjList, u), "233"), v));
+            (print ("adding " ^ T.makeString v ^ " to adjList of " ^ T.makeString u);
+            adjList := nodeMap.insert(!adjList, u, nodeSet.add(valOf(nodeMap.find(!adjList, u), "233"), v));
             degree := nodeMap.insert(!degree, u, valOf(nodeMap.find(!degree, u), "234") + 1)) else ();
           if not(nodeSet.member(!precolored, v)) then
-            (adjList := nodeMap.insert(!adjList, v, nodeSet.add(valOf(nodeMap.find(!adjList, v), "236"), u));
+            (print ("adding " ^ T.makeString u ^ " to adjList of " ^ T.makeString v);
+            adjList := nodeMap.insert(!adjList, v, nodeSet.add(valOf(nodeMap.find(!adjList, v), "236"), u));
             degree := nodeMap.insert(!degree, v, valOf(nodeMap.find(!degree, v), "237") + 1)) else ())
         else ()
 
@@ -583,10 +603,9 @@ struct
             fun forall(w) =
               if nodeSet.member((nodeSet.union(!coloredNodes, !precolored)), getAlias w) then
                 let
-                  val _ = print "a\n"
                   val a = valOf(nodeMap.find(!colors, getAlias w), "417") handle NotFound => ErrorMsg.impossible(T.makeString(getAlias w) ^ " has no color")
-                  val _ = print "b\n"
                 in
+                  print ("deleting color " ^ Int.toString a ^ " from okColors\n");
                   okColors := intSet.delete(!okColors, a)
                   handle NotFound => print (T.makeString a ^ " not found in assignColors\n")
                 end
@@ -594,7 +613,6 @@ struct
           in
             print ("Doing " ^ T.makeString n ^ "\n");
             nodeSet.app forall (valOf(nodeMap.find(!adjList, n), "420") handle NotFound => nodeSet.empty);
-            print "test\n";
             if intSet.isEmpty(!okColors) then
               (spilledNodes := nodeSet.add(!spilledNodes, n);
               print ("spilling " ^ T.makeString n ^ "\n"))
@@ -610,13 +628,14 @@ struct
         let
           fun addCoalescedColor(n) =
             let
-              val c = valOf(nodeMap.find(!colors, getAlias n), "432")
+              val c = valOf(nodeMap.find(!colors, getAlias n), "432") handle NotFound => ErrorMsg.impossible(T.makeString(getAlias n) ^ " has no color.")
             in
               print ("assigning color " ^ Int.toString c ^ " to " ^ T.makeString n ^ " from " ^ T.makeString(getAlias n) ^ " (c)\n");
               colors := nodeMap.insert(!colors, n, c)
             end
         in
-          nodeSet.app addCoalescedColor (!coalescedNodes)
+          nodeSet.app addCoalescedColor (!coalescedNodes);
+          print "-------\n"
         end)
 
       and rewriteProgram() =
