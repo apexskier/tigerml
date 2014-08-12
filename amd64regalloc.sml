@@ -73,7 +73,7 @@ struct
       (* Node work-lists, sets, and stacks.
       * The following lists and sets are always mutually disjoint and every
       * node is always in exactly one of the sets or lists. *)
-      val precolored = ref (nodeSet.addList(nodeSet.empty, F.registerTemps)):nodeSet.set ref (* machine registers, preassigned a color *)
+      val precolored = ref (nodeSet.addList(nodeSet.empty, F.registerTemps)):nodeSet.set ref (* machine registers, preassigned a color *) (* TODO: remove stack pointer and base pointer from this *)
       val initial = ref nodeSet.empty:nodeSet.set ref (* temporary registers, not precolored and not yet processed *)
       val simplifyWorklist = ref nodeSet.empty:nodeSet.set ref (* Low-degree non-move-related nodes *)
       val freezeWorklist = ref nodeSet.empty:nodeSet.set ref (* Low-degree move-related nodes *)

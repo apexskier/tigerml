@@ -56,7 +56,7 @@ struct
 
   fun newFrame{name, formals} =
     let
-      val n = length formals
+      val n = length formals (* TODO: deal with arguments overflowing the registers *)
       fun itr(nil, _) = nil
         | itr(arg::rest, offset) =
             if arg then
@@ -106,7 +106,7 @@ struct
 
   fun procEntryExit1(frame as {name, formals=forms, accesses, locals, entree}, body) =
     let
-      (* val saved = map (fn t => Tree.TEMP t) (RV :: calleeSaves)
+      (* TODO val saved = map (fn t => Tree.TEMP t) (RV :: calleeSaves)
       val temps = map (fn t => exp (allocLocal(frame)(true)) (Tree.TEMP FP)) saved
       val saveRegisters = seq(ListPair.mapEq move (temps, saved))
       val restoreRegisters = seq(ListPair.mapEq move (saved, temps))
