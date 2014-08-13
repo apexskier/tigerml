@@ -83,7 +83,7 @@ struct
             end
          | makeEdges(_) = ()
     in
-      makeEdges(nodes);
+      makeEdges nodes;
       (Flow.FGRAPH{control=g,
                    def=def,
                    use=use,

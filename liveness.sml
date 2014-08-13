@@ -103,6 +103,11 @@ struct
           of SOME n => n
            | NONE => ErrorMsg.impossible "table lookup failed"
 
+      fun valOfFG(tbl, object) =
+        case FGT.look(tbl, object)
+          of SOME n => n
+           | NONE => ErrorMsg.impossible "FG table lookup failed"
+
       fun lookSet(tbl, node) =
         let
           val (g, n) = node

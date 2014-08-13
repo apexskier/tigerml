@@ -99,9 +99,24 @@ struct
       val moveList = ref nodeMap.empty:moveSet.set nodeMap.map ref  (* a mapping from a node to the list of moves it is associated with *)
       val alias = ref nodeMap.empty (* when a move (u, v) has been coalesced, and v put in coalescedNodes, then alias(v) = u *)
       val initokColors = (map (fn x=>x-1) (List.tabulate(length F.registerTemps, fn x => x+1)))
+      val initok =
+        let
+          fun test(color:int, colors:int list):int list =
+            let
+              val colorTemp = List.nth(F.registerTemps, color)
+              fun eq(x:T.temp) =
+                x = colorTemp
+            in
+              if List.exists eq F.colorables then color::colors else colors
+            end
+        in
+          foldl test [] initokColors
+        end
+      val _ = print ("initokColors: " ^ ListFormat.listToString (Int.toString) initokColors ^ "\n")
+      val _ = print ("initok: " ^ ListFormat.listToString (Int.toString) initok ^ "\n")
       val colors = ref (foldl nodeMap.insert'
                               nodeMap.empty
-                              (ListPair.zip(F.registerTemps, initokColors)))
+                              (ListPair.zip(F.registerTemps, (map (fn x=>x-1) (List.tabulate(length F.registerTemps, fn x => x+1))))))
 
       val instructions = ref instrs:Assem.instr list ref
 
@@ -329,7 +344,7 @@ struct
               TT.enter(t, n,
                        List.nth(colorableStrs,
                                 (valOf(nodeMap.find(!colors, n), "193")) ))
-                                  handle NotFound => (print ("issue with " ^ T.makeString n ^ "\n"); t)
+                                  handle NotFound => ErrorMsg.impossible "assigned a non-existant color to temp"
           in
             allocation' := nodeSet.foldl enterAlloc F.tempMap (nodeSet.union(!coloredNodes, !coalescedNodes))
           end;
@@ -599,7 +614,7 @@ struct
               in selectStack := tl(!selectStack); n' end
             val _ = if nodeSet.member(!precolored, n) then print ("Putting precolored node "^T.makeString n^" in coloredNodes!\n") else ();
             val i = ref 0
-            val okColors = ref (intSet.addList(intSet.empty, initokColors))
+            val okColors = ref (intSet.addList(intSet.empty, initok))
             fun forall(w) =
               if nodeSet.member((nodeSet.union(!coloredNodes, !precolored)), getAlias w) then
                 let
@@ -620,7 +635,7 @@ struct
               let
                 val c = hd(intSet.listItems(!okColors))
               in
-                print ("assigning color " ^ Int.toString c ^ " to " ^ T.makeString n ^ "\n");
+                print ("assigning color " ^ Int.toString c ^ " ("^ List.nth(F.registers, c) ^") to " ^ T.makeString n ^ "\n");
                 coloredNodes := nodeSet.add(!coloredNodes, n);
                 colors := nodeMap.insert(!colors, n, c)
               end
@@ -658,14 +673,29 @@ struct
                   val nodeIdx = idx(!tnode node, !cfNodes) - (if bfr then 1 else 0)
                   val newnodes = List.map (fn _ => FG.newNode(!control)) instrs
                 in
-                  cfNodes := (List.take(!cfNodes, nodeIdx)) @ newnodes @ (List.drop(!cfNodes, nodeIdx));
+                  print ("test " ^ Int.toString nodeIdx ^ ", length: " ^ Int.toString(length(!cfNodes)) ^ "\n");
+                  cfNodes :=
+                    (if nodeIdx = length (!cfNodes) then
+                      !cfNodes @ newnodes
+                    else
+                      if nodeIdx < 0 then
+                        newnodes @ !cfNodes
+                      else
+                        (List.take(!cfNodes, nodeIdx)) @ newnodes @ (List.drop(!cfNodes, nodeIdx)));
                   print "inserting some instructions\n";
-                  instructions := (List.take(!instructions, nodeIdx)) @ instrs @ (List.drop(!instructions, nodeIdx))
+                  instructions :=
+                    (if nodeIdx = length (!cfNodes) then
+                      !instructions @ instrs
+                    else
+                      if nodeIdx < 0 then
+                        instrs @ !instructions
+                      else
+                        (List.take(!instructions, nodeIdx)) @ instrs @ (List.drop(!instructions, nodeIdx)))
                 end
               fun forEachDef(var, newtemps) =
                 let
                   val newtemp = T.newTemp()
-                  val _ = print ("made new temp " ^ T.makeString newtemp)
+                  val _ = print ("made new temp " ^ T.makeString newtemp ^ "\n")
                   val tree = Tree.MOVE(Tree.TEMP newtemp, F.exp(access)(Tree.TEMP F.FP))
                   val instrs = Amd64Codegen.codegen frame tree
                 in
@@ -675,7 +705,7 @@ struct
               fun forEachUse(var, newtemps) =
                 let
                   val newtemp = T.newTemp()
-                  val _ = print ("made new temp " ^ T.makeString newtemp)
+                  val _ = print ("made new temp " ^ T.makeString newtemp ^ "*\n")
                   val tree = Tree.MOVE(F.exp(access)(Tree.TEMP F.FP), Tree.TEMP newtemp)
                   val instrs = Amd64Codegen.codegen frame tree
                 in
