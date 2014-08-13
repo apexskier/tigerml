@@ -70,26 +70,29 @@ struct
             end
 
         | munchStm(T.CJUMP(oper, T.CONST i, e, l1, l2)) =
-            emit(A.OPER{assem="cmp \t`s0, $" ^ Int.toString i ^ "\n" ^ (* TODO: this appears to be an illegal statement *)
-                              assemOperJmp oper ^ " " ^
-                              (if oper = T.NE then S.name l2 else S.name l1) ^ "\n",
+            (emit(A.OPER{assem="cmp \t`s0, $" ^ Int.toString i ^ "\n", (* TODO: this appears to be an illegal statement *)
                         src=[munchExp e],
                         dst=nil,
-                        jump=SOME[l1, l2]})
+                        jump=SOME[l1, l2]});
+            emit(A.OPER{assem=assemOperJmp oper ^ " " ^
+                              (if oper = T.NE then S.name l2 else S.name l1) ^ "\n",
+                        src=nil, dst=nil, jump=SOME[l1, l2]}))
         | munchStm(T.CJUMP(oper, e, T.CONST i, l1, l2)) =
-            emit(A.OPER{assem="cmp \t$" ^ Int.toString i ^ ", `s0\n" ^
-                              assemOperJmp oper ^ " " ^
-                              (if oper = T.NE then S.name l2 else S.name l1) ^ "\n",
+            (emit(A.OPER{assem="cmp \t$" ^ Int.toString i ^ ", `s0\n",
                         src=[munchExp e],
                         dst=nil,
-                        jump=SOME[l1, l2]})
-        | munchStm(T.CJUMP(oper, e1, e2, l1, l2)) =
-            emit(A.OPER{assem="cmp \t`s1, `s0\n" ^
-                              assemOperJmp oper ^ " " ^
+                        jump=SOME[l1, l2]});
+            emit(A.OPER{assem=assemOperJmp oper ^ " " ^
                               (if oper = T.NE then S.name l2 else S.name l1) ^ "\n",
+                        src=nil, dst=nil, jump=SOME[l1, l2]}))
+        | munchStm(T.CJUMP(oper, e1, e2, l1, l2)) =
+            (emit(A.OPER{assem="cmp \t`s1, `s0\n",
                         src=[munchExp e1, munchExp e2],
                         dst=nil,
-                        jump=SOME[l1, l2]})
+                        jump=SOME[l1, l2]});
+            emit(A.OPER{assem=assemOperJmp oper ^ " " ^
+                              (if oper = T.NE then S.name l2 else S.name l1) ^ "\n",
+                        src=nil, dst=nil, jump=SOME[l1, l2]}))
 
         | munchStm(T.MOVE(T.TEMP t0, T.TEMP t1)) =
             emit(A.MOVE{assem="movq \t`s0, `d0\n",

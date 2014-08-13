@@ -35,8 +35,6 @@ structure Main = struct
           TextIO.output(out, prolog);
           app (fn i => (
             TextIO.output(TextIO.stdOut, Assem.format(format) i);
-            TextIO.output(TextIO.stdOut, format0 i);
-            print "\n";
             TextIO.output(out, format0 i))) instrs'';
           TextIO.output(out, epilog);
           print "done applying formatting to instrs'\n";

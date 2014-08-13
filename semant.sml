@@ -443,7 +443,7 @@ struct
               case S.look(tenv, typ)
                 of SOME(T.ARRAY(ty, unique)) =>
                   if tyEq(initTy, ty) then
-                    {exp=Tr.arrayExp{size=sizeExp, init=initExp}, ty=T.ARRAY(ty, unique)}
+                    {exp=Tr.arrayExp{size=sizeExp, init=initExp}, ty=T.ARRAY(initTy, unique)}
                   else
                     (error pos ("init type doesn't match array type: '" ^ S.name typ ^ "'");
                     errExpty)
