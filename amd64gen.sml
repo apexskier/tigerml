@@ -19,7 +19,7 @@ struct
         end
 
       fun intStr(i) =
-        if i <> 0 then Int.toString i
+        if i <> 0 then Int.toString(i * F.wordsize)
         else ""
 
       fun assemOperJmp(oper) =

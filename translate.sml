@@ -241,7 +241,7 @@ struct
     Ex(F.externalCall("compareRef", [unEx left, unEx right]))
 
   and fieldVar{var, pos} =
-    Ex(T.MEM(T.BINOP(T.PLUS, unEx var, T.CONST(pos * F.wordsize))))
+    Ex(T.MEM(T.BINOP(T.PLUS, unEx var, T.CONST pos)))
 
   and forExp{var, body, lo, hi, fin} =
     let
@@ -363,8 +363,8 @@ struct
       val i = ref 0
       fun insertField(field) =
         (i := !i + 1;
-        T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP l, T.CONST(F.wordsize * (!i-1)))), unEx field))
-      val size = length fields * F.wordsize
+        T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP l, T.CONST(!i-1))), unEx field))
+      val size = length fields
       val (fieldsTree) = seq(map insertField fields)
     in
       Ex(T.ESEQ(T.SEQ(T.MOVE(T.TEMP l,
