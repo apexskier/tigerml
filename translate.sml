@@ -393,10 +393,21 @@ struct
 
   and stringExp(s) =
     let
-      val l = Temp.newLabel()
+      fun eq frag =
+        case frag
+          of F.STRING(l, s') => s' = s
+           | _ => false
+      val mtch = List.find eq (!fragments)
     in
-      fragments := F.STRING(l, s) :: !fragments;
-      Ex(T.NAME l)
+      case mtch
+        of SOME(F.STRING(l, _)) => Ex(T.NAME l)
+         | _ =>
+          let
+            val l = Temp.newLabel()
+          in
+            fragments := F.STRING(l, s) :: !fragments;
+            Ex(T.NAME l)
+          end
     end
 
   and subscriptVar{var, loc} =
