@@ -76,16 +76,13 @@ struct
   fun formals(f as {name, formals, accesses, locals, entree}) =
     accesses
 
-  fun allocLocal(f:frame) escape =
-    let
-      val numLocals = #locals f
-    in
-      if escape then
-        (!numLocals = !numLocals + 1;
-        InFrame(!numLocals))
-      else
-        InReg(let val t = Temp.newTemp() in print ("making new temp "^Temp.makeString t^" allocLocal\n"); t end)
-    end
+  fun allocLocal(f as {name, formals=forms, accesses, locals, entree}) escape =
+    if escape then
+      (locals := !locals + 1;
+      print ("making new local in frame with offset "^Int.toString(!locals)^"\n");
+      InFrame(!locals))
+    else
+      InReg(let val t = Temp.newTemp() in print ("making new temp "^Temp.makeString t^" allocLocal\n"); t end)
 
   fun externalCall(name, args) =
     Tree.CALL(Tree.NAME(Temp.namedLabel name), args)
