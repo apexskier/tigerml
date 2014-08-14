@@ -53,27 +53,6 @@ struct
     let val A = actTy a
         val B = actTy b
     in
-      (*
-      case A
-        of T.RECORD _ => print "-----> record ?= "
-         | T.NIL => print "-----> nil ?= "
-         | T.INT => print "-----> int ?= "
-         | T.STRING => print "-----> string ?= "
-         | T.ARRAY _ => print "-----> array ?= "
-         | T.NAME _ => print "-----> name ?= "
-         | T.UNIT => print "-----> unit ?= "
-         | T.CLASS s => print ("-----> class '" ^ S.name s ^ "' ?= ")
-         ;
-      case B
-        of T.RECORD _ => print "record\n"
-         | T.NIL => print "nil\n"
-         | T.INT => print "int\n"
-         | T.STRING => print "string\n"
-         | T.ARRAY _ => print "array\n"
-         | T.NAME _ => print "name\n"
-         | T.UNIT => print "unit\n"
-         | T.CLASS _ => print ("class '" ^ S.name s ^ "'\n)"
-         ; *)
       if A = B then true
       else
         case A
@@ -541,16 +520,6 @@ struct
                               getAttrs(pclass', foldl insertAttr baseAttrs thisAttrs)
                             end
                       val attrs = getAttrs(class, nil)
-                      (* DEBUG:
-                      val _ =
-                        let
-                          val i = ref 0
-                          fun printattr(s, e) =
-                            (i := !i + 1;
-                            print ("'" ^ S.name name ^ "' attribute " ^ Int.toString(!i) ^ ": '" ^ S.name s ^ "'\n"))
-                        in
-                          app printattr attrs
-                        end *)
                       fun getExp(s, exp) = exp
                       val attrs' = map getExp attrs
                     in
@@ -745,16 +714,6 @@ struct
                     (name, valOf(S.look(venv', name))) :: attrs
                 | lookUpAttr(_) = ErrorMsg.impossible "ClassDec or TypeDec in class attributes"
               val attrs = foldl lookUpAttr nil attributes
-              (* DEBUG:
-              val _ =
-                let
-                  val i = ref 0
-                  fun printattr(s, e) =
-                    (i := !i + 1;
-                    print ("'" ^ S.name name ^ "' attribute " ^ Int.toString(!i) ^ ": '" ^ S.name s ^ "'\n"))
-                in
-                  app printattr attrs
-                end *)
 
               val envclass' =
                 E.ClassEntry{parent=SOME(parentClassEntry), attributes=attrs}

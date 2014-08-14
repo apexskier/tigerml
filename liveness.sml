@@ -348,8 +348,7 @@ struct
                     in
                       if G.eq(b', c) then ()
                       else
-                        (print ("**making edge from " ^ conv a ^ " to " ^ conv b' ^ "\n");
-                        G.mk_edge{from=a, to=b'})
+                        G.mk_edge{from=a, to=b'}
                     end
                 in
                   app addEdge outs;
@@ -359,19 +358,16 @@ struct
                 (case TT.look(def, n)
                   of SOME vars =>
                     let
-                      val _ = print ("examining " ^ FG.nodename h ^ "\n")
                       fun mkedges(var:T.temp) =
                         let
                           val varNode = tnode var
-                          val _ = print ("  " ^ T.makeString var ^ "\n")
                           fun mkedges'(out:T.temp) =
                             let
                               val liveNode = tnode out
                             in
                               if G.eq(varNode, liveNode) orelse G.isAdj(varNode, liveNode) then ()
                               else
-                                (print ("  making edge from " ^ conv varNode ^ " to " ^ conv liveNode ^ "\n");
-                                G.mk_edge{from=varNode, to=liveNode})
+                                G.mk_edge{from=varNode, to=liveNode}
                             end
                         in
                           app mkedges' outs
@@ -398,10 +394,6 @@ struct
              | NONE => T.makeString(t')
         end
     in
-      app
-      (fn (n1, n2) =>
-        print (conv n1 ^ " moves to " ^ conv n2 ^ "\n"))
-      moves;
       (IGRAPH{graph=iGraph,
               tnode=tnode,
               gtemp=gTemp,

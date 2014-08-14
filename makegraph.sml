@@ -104,7 +104,7 @@ struct
               of SOME(l) => ListFormat.listToString (Temp.makeString) l
                | NONE => ErrorMsg.impossible "error"
         in
-          print (G.nodename n ^ ": " ^ getAssem n ^ "  use: " ^ uses ^ "\n  def: " ^ defs ^ "\n")
+          ErrorMsg.debug (G.nodename n ^ ": " ^ getAssem n ^ "  use: " ^ uses ^ "\n  def: " ^ defs ^ "\n")
         end) nodes
     in
       makeEdges nodes;

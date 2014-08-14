@@ -341,15 +341,7 @@ struct
   and letExp(nil, body) =
         body
     | letExp(decs, body) =
-        let
-          (* fun testprint(dec) =
-            (print "****************\n";
-            Printtree.printtree(TextIO.stdOut, unNx dec);
-            print "----------------\n")
-          val _ = app testprint(decs) *)
-        in
-          Ex(T.ESEQ(seq(List.map unNx decs), unEx body))
-        end
+        Ex(T.ESEQ(seq(List.map unNx decs), unEx body))
 
   and newExp{attrs, level} =
     recordExp(attrs)
