@@ -64,7 +64,7 @@ struct
               val instr = G.Table.look(instrsTable, a)
             in
               if G.isAdj(a, b) then ()
-              else G.mk_edge{from=a, to=b};
+              else G.mk_edge{from=b, to=a};
               case instr
                 of SOME(A.OPER{assem, dst, src, jump}) =>
                   (case jump
