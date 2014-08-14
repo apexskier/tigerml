@@ -184,10 +184,10 @@ struct
 
       and munchArgs(argnum, arg::args) = (* TODO: handle more parameters than arg registers *)
             let
-              val arg' = munchExp arg
+              val arg' = List.nth(F.argRegs, argnum)
             in
               emit(A.MOVE{assem="movq \t`s0, `d0 \t# arg " ^ Int.toString argnum ^ "\n",
-                          src=arg', dst=List.nth(F.argRegs, argnum)});
+                          src=munchExp arg, dst=arg'});
               arg' :: munchArgs(argnum + 1, args)
             end
         | munchArgs(argnum, []) = []
