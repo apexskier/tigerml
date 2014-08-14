@@ -241,19 +241,20 @@ struct
               (FGT.enter(outLiveMap', n, outTemps), FGT.enter(inLiveMap', n, inTemps))
             end
           val (newOutLiveMap, newInLiveMap) = foldl foreach (inLiveMap, outLiveMap) fgNodes
-          fun doprint(node) =
+          (* fun doprint(node) =
             let
               val nodeOuts = tempSet.listItems(valOfFG(newOutLiveMap, node))
               val nodeIns = tempSet.listItems(valOfFG(newInLiveMap, node))
               val os = ListFormat.listToString (T.makeString) nodeOuts
               val is = ListFormat.listToString (T.makeString) nodeIns
               val su = ListFormat.listToString (FG.nodename) (FG.succ node)
+              val pr = ListFormat.listToString (FG.nodename) (FG.pred node)
               val us = ListFormat.listToString (T.makeString) (valOfFG(use, node))
               val de = ListFormat.listToString (T.makeString) (valOfFG(def, node))
             in
-              print (FG.nodename node ^ "-> " ^ assem(node) ^ "  out: " ^ os ^ "\n  ins: " ^ is ^ "\n  succ: " ^ su ^ "\n  use: " ^ us ^ "\n  def: " ^ de ^ "\n")
+              print (FG.nodename node ^ "-> " ^ assem(node) ^ "  out: " ^ os ^ "\n  ins: " ^ is ^ "\n  succ: " ^ su ^ "\n  pred: " ^ pr ^ "\n  use: " ^ us ^ "\n  def: " ^ de ^ "\n")
             end
-          val _ = app doprint fgNodes
+          val _ = app doprint fgNodes *)
         in
           if equal(newOutLiveMap, outLiveMap) andalso equal(newInLiveMap, inLiveMap) then
             (newOutLiveMap, newInLiveMap)
@@ -261,6 +262,20 @@ struct
         end
 
       val (outLiveMap, inLiveMap) = repeat(initOutLiveMap, initInLiveMap)
+      fun doprint(node) =
+        let
+          val nodeOuts = tempSet.listItems(valOfFG(outLiveMap, node))
+          val nodeIns = tempSet.listItems(valOfFG(inLiveMap, node))
+          val os = ListFormat.listToString (T.makeString) nodeOuts
+          val is = ListFormat.listToString (T.makeString) nodeIns
+          val su = ListFormat.listToString (FG.nodename) (FG.succ node)
+          val pr = ListFormat.listToString (FG.nodename) (FG.pred node)
+          val us = ListFormat.listToString (T.makeString) (valOfFG(use, node))
+          val de = ListFormat.listToString (T.makeString) (valOfFG(def, node))
+        in
+          print (FG.nodename node ^ "-> " ^ assem(node) ^ "  out: " ^ os ^ "\n  ins: " ^ is ^ "\n  succ: " ^ su ^ "\n  pred: " ^ pr ^ "\n  use: " ^ us ^ "\n  def: " ^ de ^ "\n")
+        end
+      val _ = app doprint fgNodes
 
       fun getOutLives(node:FG.node):Temp.temp list =
         tempSet.listItems(valOfFG(outLiveMap, node))
