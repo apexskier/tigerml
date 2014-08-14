@@ -4,10 +4,11 @@ struct
   datatype flowgraph = FGRAPH of {control: Graph.graph,
                                   def: Temp.temp list Graph.Table.table,
                                   use: Temp.temp list Graph.Table.table,
+                                  assem: Graph.node -> string,
                                   ismove: bool Graph.Table.table}
 
 
-  fun show(out, FGRAPH{control, def, use, ismove}) =
+  fun show(out, FGRAPH{control, def, use, assem, ismove}) =
     let
       val nodeList = Graph.nodes control
       val nodeStrings = (fn n => (Graph.nodename n))

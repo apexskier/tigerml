@@ -409,19 +409,19 @@ struct
       val var' = unEx var
       val loChk =
         fn(t, f) =>
-          T.CJUMP(T.LT, loc', T.CONST 0, t, f)
+          T.CJUMP(T.GT, T.CONST 0, loc', t, f)
       val hiChk =
         fn(t, f) =>
-          T.CJUMP(T.GT, loc', var', t, f)
+          T.CJUMP(T.LT, var', loc', t, f)
     in
-      Ex(T.ESEQ(seq[(loChk)(errLab, hiChkLab),
+      (* Ex(T.ESEQ(seq[(loChk)(errLab, hiChkLab),
                     T.LABEL hiChkLab,
                     (hiChk)(errLab, goodLab),
                     T.LABEL errLab,
                     T.EXP(T.CALL(T.NAME(Temp.namedLabel("print")),
                                  [unEx(stringExp("runtime error: " ^ "subscripting out of bounds" ^ "\n"))])),
-                    T.LABEL goodLab],
-                T.MEM(T.BINOP(T.PLUS, var', loc'))))
+                    T.LABEL goodLab], *)
+                Ex(T.MEM(T.BINOP(T.PLUS, var', loc'))(*))*))
     end
 
   and varDec{init, level, access} =

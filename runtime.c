@@ -4,12 +4,12 @@
 
 int *initArray(int size, int init) {
     int i;
-    int *a = (int *)malloc(size * sizeof(int));
+    long *a = (long *)malloc(size * sizeof(long));
     for (i = 0; i < size; i++) a[i] = init;
 #ifdef DEBUG
     printf("initialized array: size %d, init %d\n", size, init);
 #endif
-    return a;
+    return (int *)a;
 }
 
 int *allocRecord(int size) {

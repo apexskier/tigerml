@@ -81,7 +81,7 @@ struct
             (emit(A.OPER{assem="cmp \t$" ^ Int.toString i ^ ", `s0\n",
                         src=[munchExp e],
                         dst=nil,
-                        jump=SOME[l1, l2]});
+                        jump=NONE});
             emit(A.OPER{assem=assemOperJmp oper ^ " " ^
                               (if oper = T.NE then S.name l2 else S.name l1) ^ "\n",
                         src=nil, dst=nil, jump=SOME[l1, l2]}))
@@ -89,7 +89,7 @@ struct
             (emit(A.OPER{assem="cmp \t`s1, `s0\n",
                         src=[munchExp e1, munchExp e2],
                         dst=nil,
-                        jump=SOME[l1, l2]});
+                        jump=NONE});
             emit(A.OPER{assem=assemOperJmp oper ^ " " ^
                               (if oper = T.NE then S.name l2 else S.name l1) ^ "\n",
                         src=nil, dst=nil, jump=SOME[l1, l2]}))
@@ -192,7 +192,7 @@ struct
             end
         | munchArgs(argnum, []) = []
 
-      and munchExp(T.BINOP(oper, e1, e2)) = (* TODO: multiply needs to be written, as it does some crazy stuff with other registers *)
+      and munchExp(T.BINOP(oper, e1, e2)) =
             let
               val e1' = munchExp e1
               val e2' = munchExp e2
@@ -230,20 +230,21 @@ struct
 
         | munchExp(T.CALL(T.NAME n, args)) =
             let
-              val args = munchArgs(0, args)
+              val args' = munchArgs(0, args)
             in
               (result(fn r => emit(A.OPER{assem="call \t" ^ S.name n ^ "\n",
-                                         src=args,
-                                         dst=F.RV::F.callerSaves, jump=NONE}));
+                                         src=args',
+                                         dst=F.callerSaves, jump=NONE}));
               F.RV)
             end
         | munchExp(T.CALL(e, args)) =
             let
               val e' = munchExp e
+              val args' = munchArgs(0, args)
             in
               result(fn r => emit(A.OPER{assem="call \t*`s0\n",
-                                         src=munchExp e :: munchArgs(0, args),
-                                         dst=F.RV::F.callerSaves, jump=NONE}));
+                                         src=e' :: args',
+                                         dst=F.callerSaves, jump=NONE}));
               F.RV
             end
 
