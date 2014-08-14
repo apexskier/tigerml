@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+/* *
+ * Internal Runtime
+ * */
+
 int *initArray(int size, int init) {
     int i;
     long *a = (long *)malloc(size * sizeof(long));
@@ -35,6 +39,10 @@ int stringEqual(struct string *s, struct string *t) {
     for (i = 0; i < s->length; i++) if (s->chars[i] != t->chars[i]) return 0;
     return 1;
 }
+
+/* *
+ * Standard Library
+ * */
 
 void print(struct string *s) {
     int i;

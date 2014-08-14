@@ -128,6 +128,16 @@ struct
                         src=[n],
                         dst=[t],
                         jump=NONE})
+        | munchStm(T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP t, T.CONST i)), e)) =
+            emit(A.OPER{assem="movq \t`s0, " ^ intStr i ^ "(`d0)\n",
+                        src=[munchExp e],
+                        dst=[t],
+                        jump=NONE})
+        | munchStm(T.MOVE(T.MEM(T.BINOP(T.PLUS, T.CONST i, T.TEMP t)), e)) =
+            emit(A.OPER{assem="movq \t`s0, " ^ intStr i ^ "(`d0)\n",
+                        src=[munchExp e],
+                        dst=[t],
+                        jump=NONE})
         | munchStm(T.MOVE(T.MEM(T.TEMP t0), T.TEMP t1)) =
             emit(A.OPER{assem="movq \t`s0, (`d0)\n",
                         src=[t1], dst=[t0], jump=NONE})
@@ -174,13 +184,13 @@ struct
             emit(A.MOVE{assem="movq \t`s0, `d0\n",
                         src=munchExp e,
                         dst=t})
+        | munchStm(T.MOVE(e1, e2)) =
+            emit(A.MOVE{assem="movq \t`s0, `d0\n",
+                        src=munchExp e2,
+                        dst=munchExp e1})
 
         | munchStm(T.EXP e) =
             (munchExp e; ())
-
-        | munchStm tree =
-            (print "buggy tree:\n"; Printtree.printtree(TextIO.stdOut, tree);
-            ErrorMsg.impossible "unexpected statement in maximal munch algorithm")
 
       and munchArgs(argnum, arg::args) = (* TODO: handle more parameters than arg registers *)
             let

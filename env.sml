@@ -49,7 +49,7 @@ struct
                                                    formals=nil,
                                                    result=T.UNIT}),
                     S.symbol("getchar"),  FunEntry{level=Tr.outermost,
-                                                   label=Temp.namedLabel "getchar",
+                                                   label=Temp.namedLabel "gtchar",
                                                    formals=nil,
                                                    result=T.STRING}),
                     S.symbol("ord"),      FunEntry{level=Tr.outermost,

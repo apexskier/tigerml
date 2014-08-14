@@ -225,7 +225,7 @@ struct
     let
       val oper' =
         case oper
-          of A.EqOp => "strEq"
+          of A.EqOp => "stringEqual"
            | A.NeqOp => "strNeq"
            | A.LtOp => "strLt"
            | A.LeOp => "strLe"
@@ -238,7 +238,7 @@ struct
     end
 
   and compareRefEqExp(left, right) =
-    Ex(F.externalCall("compareRef", [unEx left, unEx right]))
+    Cx(fn(t, f) => T.CJUMP(T.EQ, unEx left, unEx right, t, f))
 
   and fieldVar{var, pos} =
     Ex(T.MEM(T.BINOP(T.PLUS, unEx var, T.CONST pos)))
