@@ -5,6 +5,7 @@ sig
   val lineNum : int ref
   val linePos : int list ref
   val sourceStream : TextIO.instream ref
+  val debug : string -> unit
   val error : int -> string -> unit
   exception Error
   val impossible : string -> 'a   (* raises Error *)
@@ -13,11 +14,16 @@ end
 
 structure ErrorMsg : ERRORMSG =
 struct
+  val DEBUG = true
   val anyErrors = ref false
   val fileName = ref ""
   val lineNum = ref 1
   val linePos = ref [1]
   val sourceStream = ref TextIO.stdIn
+
+  fun debug s =
+    if DEBUG then print s
+    else ()
 
   fun reset() = (anyErrors:=false;
     fileName:="";

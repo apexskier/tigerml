@@ -1,4 +1,4 @@
-#define DEBUG
+// #define DEBUG
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -71,11 +71,22 @@ int main() {
 }
 
 int ord(struct string *s) {
+#ifdef DEBUG
+    printf("ord: '");
+    int i = 0;
+    for (i = 0; i < s->length; i++) {
+        printf("%c", s->chars[i]);
+    }
+    printf("' = %d\n", (int)s->chars[0]);
+#endif
     if (s->length == 0) return -1;
     else return s->chars[0];
 }
 
 struct string *chr(int i) {
+#ifdef DEBUG
+    printf("chr: %d = '%s'\n", i, (consts + i)->chars);
+#endif
     if (i < 0 || i >= 256) {
         printf("chr(%d) out of range\n", i);
         exit(1);

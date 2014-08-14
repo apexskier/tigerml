@@ -63,7 +63,7 @@ struct
             if arg then
               InFrame(offset) :: itr(rest, offset + 1)
             else
-              InReg(let val t = Temp.newTemp() in print ("making new temp "^Temp.makeString t^" newFrame\n"); t end) :: itr(rest, offset)
+              InReg(Temp.newTemp()) :: itr(rest, offset)
       val accesses = itr(formals, 0) (* generate instructions to save all the arguments *)
       fun instr(access, reg) =
         Tree.MOVE(exp access (Tree.TEMP FP), Tree.TEMP reg)
@@ -80,10 +80,9 @@ struct
   fun allocLocal(f as {name, formals=forms, accesses, locals, entree}) escape =
     if escape then
       (locals := !locals + 1;
-      print ("making new local in frame with offset "^Int.toString(!locals)^"\n");
       InFrame(!locals))
     else
-      InReg(let val t = Temp.newTemp() in print ("making new temp "^Temp.makeString t^" allocLocal\n"); t end)
+      InReg(Temp.newTemp())
 
   fun externalCall(name, args) =
     Tree.CALL(Tree.NAME(Temp.namedLabel name), args)
@@ -128,7 +127,6 @@ struct
               Symbol.name name ^ ":\n" ^
               "pushq \t%rbx\n" ^
               "pushq \t%r12\n" ^
-              "pushq \t%r14\n" ^
               "pushq \t%r13\n" ^
               "pushq \t%r14\n" ^
               "pushq \t%r15\n" ^
@@ -140,9 +138,8 @@ struct
               "popq \t%rbp\n" ^
               "popq \t%r15\n" ^
               "popq \t%r14\n" ^
-              "popq \t%r12\n" ^
               "popq \t%r13\n" ^
-              "popq \t%r14\n" ^
+              "popq \t%r12\n" ^
               "popq \t%rbx\n" ^
               "ret\n"}
     end
