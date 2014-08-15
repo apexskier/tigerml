@@ -159,7 +159,7 @@ struct
         if levEq(defLevel, curLevel) then
           T.TEMP F.FP
         else
-          T.MEM(T.BINOP(T.PLUS, staticLink(defLevel, parent), T.CONST 0))
+          T.MEM(staticLink(defLevel, parent))
     | staticLink(_, Outer) = T.TEMP F.FP
 
   (* Translation *)
@@ -241,7 +241,10 @@ struct
     Cx(fn(t, f) => T.CJUMP(T.EQ, unEx left, unEx right, t, f))
 
   and fieldVar{var, pos} =
-    Ex(T.MEM(T.BINOP(T.PLUS, unEx var, T.CONST(pos * F.wordsize))))
+    if pos = 0 then
+      Ex(T.MEM(unEx var))
+    else
+      Ex(T.MEM(T.BINOP(T.PLUS, unEx var, T.CONST(pos * F.wordsize))))
 
   and forExp{var, body, lo, hi, fin} =
     let
@@ -354,8 +357,12 @@ struct
       val l = Temp.newTemp()
       val i = ref 0
       fun insertField field =
-        (i := !i + 1;
-        T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP l, T.CONST((!i - 1) * F.wordsize))), unEx field))
+        let
+          val pos = !i
+        in
+          i := !i + 1;
+          T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP l, T.CONST(pos * F.wordsize))), unEx field)
+        end
       val size = length fields
       val (fieldsTree) = seq(map insertField fields)
     in
