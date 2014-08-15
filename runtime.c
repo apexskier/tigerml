@@ -1,4 +1,4 @@
-//#define DEBUG
+#define DEBUG
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -138,6 +138,9 @@ int not(int i) {
 struct string *getchar() { */
 struct string *gtchar() {
     int i = getc(stdin);
+#ifdef DEBUG
+    printf("got char '%c' (%d)\n", (char)i, i);
+#endif
     if (i == EOF) return &empty;
     else return consts + i;
 }

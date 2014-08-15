@@ -193,7 +193,7 @@ struct
             emit(A.OPER{assem="movq \t`s0, (`d0)\n",
                         src=[t1, t0], dst=[t0], jump=NONE})
         | munchStm(T.MOVE(T.MEM e1, e2)) =
-            emit(A.OPER{assem="movq \t`s0, (`d0) \t# testing\n",
+            emit(A.OPER{assem="movq \t`s0, (`d0)\n",
                         src=[munchExp e2], dst=[munchExp e1], jump=NONE})
         | munchStm(T.MOVE(T.CONST j, T.MEM(T.BINOP(T.PLUS, T.CONST i, T.TEMP t)))) =
             ErrorMsg.impossible "moving memory into constant"
@@ -232,19 +232,6 @@ struct
                 ErrorMsg.impossible "not implemented" (* munchDiv() *)
                | _ =>
                 if t1 = t0 then
-                  emit(A.OPER{assem=assemOper oper ^ " \t$" ^ Int.toString i ^ ", `s0 \t# coalescing a temp to const + temp instruction\n",
-                              src=[t0, t1], dst=[t0], jump=NONE})
-                else
-                  (emit(A.MOVE{assem="movq \t`s0, `d0\n",
-                              src=t1, dst=t0});
-                  emit(A.OPER{assem=assemOper oper ^ " \t$" ^ Int.toString i ^ ", `d0\n",
-                              src=[t0], dst=[t0], jump=NONE})))
-        | munchStm(T.MOVE(T.TEMP t0, T.BINOP(oper, T.TEMP t1, T.CONST i))) =
-            (case oper
-              of T.DIV =>
-                ErrorMsg.impossible "not implemented" (* munchDiv() *)
-               | _ =>
-                if t1 = t0 then
                   emit(A.OPER{assem=assemOper oper ^ " \t$" ^ Int.toString i ^ ", `s0 \t# coalescing a temp to temp + const instruction\n",
                               src=[t0, t1], dst=[t0], jump=NONE})
                 else
@@ -252,23 +239,6 @@ struct
                               src=t1, dst=t0});
                   emit(A.OPER{assem=assemOper oper ^ " \t$" ^ Int.toString i ^ ", `d0\n",
                               src=[t0], dst=[t0], jump=NONE})))
-        | munchStm(T.MOVE(T.TEMP t0, T.BINOP(oper, T.TEMP t1, T.TEMP t2))) =
-            (case oper
-              of T.DIV =>
-                ErrorMsg.impossible "not implemented" (* munchDiv() *)
-               | _ =>
-                if t0 = t1 then
-                  emit(A.OPER{assem=assemOper oper ^ " \t`s1, `d0 \t# coalescing a temp to temp + temp instruction\n",
-                              src=[t2, t1], dst=[t0], jump=NONE})
-                else
-                  if t0 = t2 then
-                    emit(A.OPER{assem=assemOper oper ^ " \t`s1, `d0 \t# coalescing a temp to temp + temp instruction\n",
-                                src=[t1, t2], dst=[t0], jump=NONE})
-                  else
-                    (emit(A.MOVE{assem="movq \t`s0, `d0 \t# src: "^Temp.makeString t2^" dst: "^Temp.makeString t0^"\n",
-                                src=t2, dst=t0});
-                    emit(A.OPER{assem=assemOper oper ^ " \t`s0, `d0 \t# didn't coalesce src: "^Temp.makeString t1^" dst: "^Temp.makeString t0^"\n",
-                                src=[t1, t0], dst=[t0], jump=NONE})))
         | munchStm(T.MOVE(T.TEMP t, T.CONST i)) =
             emit(A.OPER{assem="movq \t$" ^ Int.toString i ^ ", `d0\n",
                         src=nil,
