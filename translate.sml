@@ -196,7 +196,7 @@ struct
       if List.exists eq predefs then
         Ex(T.CALL(T.NAME name, List.map unEx args))
       else
-        Ex(T.CALL(T.NAME name, staticLink(funLevel, level) :: List.map unEx args))
+        Ex(T.CALL(T.NAME name, staticLink(level, funLevel) :: List.map unEx args))
     end
 
   and compareIntExp{oper, left, right} =
