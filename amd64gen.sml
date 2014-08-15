@@ -96,7 +96,7 @@ struct
 
         | munchStm(T.MOVE(T.TEMP t0, T.TEMP t1)) =
             if t0 <> t1 then
-              emit(A.MOVE{assem="movq \t`s0, `d0\n",
+              emit(A.MOVE{assem="movq \t`s0, `d0 \t# skipped a step\n",
                           src=t1,
                           dst=t0})
             else () (* NOTE: skipping move as args are the same *)

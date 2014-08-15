@@ -45,15 +45,16 @@ struct
 
   val colorables = calleeSaves @ callerSaves
 
-  fun exp(InFrame(k)) =
+  fun exp(InFrame k) =
         (fn(fp) => Tree.MEM(Tree.BINOP(Tree.PLUS, fp, Tree.CONST k)))
-    | exp(InReg(t)) =
+    | exp(InReg t) =
         (fn(Fp) => Tree.TEMP t)
 
-  fun move(reg, var) = Tree.MOVE(reg, var)
+  (* fun move(reg, var) = Tree.MOVE(reg, var) *)
+
   fun seq [] = Tree.EXP (Tree.CONST 0)
-    | seq [exp] = exp
-    | seq (exp :: exps) = (Tree.SEQ (exp, (seq exps)))
+    | seq [e] = e
+    | seq (e :: es) = (Tree.SEQ (e, (seq es)))
 
   fun newFrame{name, formals} =
     let
@@ -66,7 +67,7 @@ struct
               InReg(Temp.newTemp()) :: itr(rest, offset)
       val accesses = itr(formals, 0) (* generate instructions to save all the arguments *)
       fun instr(access, reg) =
-        Tree.MOVE(exp access (Tree.TEMP FP), Tree.TEMP reg)
+        Tree.MOVE(exp(access)(Tree.TEMP FP), Tree.TEMP reg)
       val instrs = ListPair.map instr (accesses, argRegs)
     in
       {name=name, formals=formals, accesses=accesses, locals=ref 0, entree=seq instrs}
