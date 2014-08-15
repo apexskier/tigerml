@@ -192,16 +192,9 @@ struct
         | munchStm(T.MOVE(T.MEM(T.TEMP t0), T.TEMP t1)) =
             emit(A.OPER{assem="movq \t`s0, (`d0)\n",
                         src=[t1, t0], dst=[t0], jump=NONE})
-        | munchStm(T.MOVE(T.MEM e1, e2)) =
-            emit(A.OPER{assem="movq \t`s0, (`d0)\n",
-                        src=[munchExp e2], dst=[munchExp e1], jump=NONE})
-        | munchStm(T.MOVE(T.CONST j, T.MEM(T.BINOP(T.PLUS, T.CONST i, T.TEMP t)))) =
+        | munchStm(T.MOVE(T.CONST j, T.MEM e)) =
             ErrorMsg.impossible "moving memory into constant"
-        | munchStm(T.MOVE(T.CONST j, T.MEM(T.BINOP(T.PLUS, T.TEMP t, T.CONST i)))) =
-            ErrorMsg.impossible "moving memory into constant"
-        | munchStm(T.MOVE(T.NAME n, T.MEM(T.BINOP(T.PLUS, T.CONST i, T.TEMP t)))) =
-            ErrorMsg.impossible "moving memory into name"
-        | munchStm(T.MOVE(T.NAME n, T.MEM(T.BINOP(T.PLUS, T.TEMP t, T.CONST i)))) =
+        | munchStm(T.MOVE(T.NAME n, T.MEM e)) =
             ErrorMsg.impossible "moving memory into name"
         | munchStm(T.MOVE(T.TEMP n, T.MEM(T.BINOP(T.PLUS, T.CONST i, T.TEMP t)))) =
             emit(A.OPER{assem="movq \t" ^ intStr i ^ "(`d0), `s0\n",
@@ -226,6 +219,9 @@ struct
         | munchStm(T.MOVE(T.TEMP t0, T.MEM(T.TEMP t1))) =
             emit(A.OPER{assem="movq \t(`s0), `d0\n",
                         src=[t1], dst=[t0], jump=NONE})
+        | munchStm(T.MOVE(T.TEMP t, T.MEM(e))) =
+            emit(A.OPER{assem="movq \t(`s0), `d0\n",
+                        src=[munchExp e], dst=[t], jump=NONE})
         | munchStm(T.MOVE(T.TEMP t0, T.BINOP(oper, T.CONST i, T.TEMP t1))) =
             (case oper
               of T.DIV =>
