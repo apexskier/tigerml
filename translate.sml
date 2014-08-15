@@ -159,7 +159,7 @@ struct
         if levEq(defLevel, curLevel) then
           T.TEMP F.FP
         else
-          T.MEM(T.BINOP(T.PLUS, T.CONST 0, staticLink(defLevel, parent))) (* TODO: why am i adding const 0 everytime *)
+          T.MEM(T.BINOP(T.PLUS, staticLink(defLevel, parent), T.CONST 0))
     | staticLink(_, Outer) = T.TEMP F.FP
 
   (* Translation *)
@@ -241,7 +241,7 @@ struct
     Cx(fn(t, f) => T.CJUMP(T.EQ, unEx left, unEx right, t, f))
 
   and fieldVar{var, pos} =
-    Ex(T.MEM(T.BINOP(T.PLUS, unEx var, T.CONST pos)))
+    Ex(T.MEM(T.BINOP(T.PLUS, unEx var, T.CONST(pos * F.wordsize))))
 
   and forExp{var, body, lo, hi, fin} =
     let
@@ -355,7 +355,7 @@ struct
       val i = ref 0
       fun insertField(field) =
         (i := !i + 1;
-        T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP l, T.CONST(!i-1))), unEx field))
+        T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP l, T.CONST((!i - 1) * F.wordsize))), unEx field))
       val size = length fields
       val (fieldsTree) = seq(map insertField fields)
     in
@@ -424,7 +424,7 @@ struct
                     T.EXP(T.CALL(T.NAME(Temp.namedLabel("print")),
                                  [unEx(stringExp("runtime error: " ^ "subscripting out of bounds" ^ "\n"))])),
                     T.LABEL goodLab], *)
-                Ex(T.MEM(T.BINOP(T.PLUS, var', loc'))(*))*))
+                Ex(T.MEM(T.BINOP(T.PLUS, var', T.BINOP(T.MUL, loc', T.CONST F.wordsize))))(*))*)
     end
 
   and varDec{init, level, access} =

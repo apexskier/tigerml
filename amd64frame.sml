@@ -46,7 +46,7 @@ struct
   val colorables = calleeSaves @ callerSaves
 
   fun exp(InFrame k) =
-        (fn(fp) => Tree.MEM(Tree.BINOP(Tree.PLUS, fp, Tree.CONST k)))
+        (fn(fp) => Tree.MEM(Tree.BINOP(Tree.PLUS, fp, Tree.CONST(k * wordsize))))
     | exp(InReg t) =
         (fn(Fp) => Tree.TEMP t)
 

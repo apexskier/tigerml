@@ -19,7 +19,7 @@ struct
         end
 
       fun intStr(i) =
-        if i <> 0 then Int.toString(i * F.wordsize)
+        if i <> 0 then Int.toString i
         else ""
 
       fun assemOperJmp(oper) =
@@ -210,7 +210,7 @@ struct
                         jump=NONE})
         | munchStm(T.MOVE(T.MEM(T.TEMP t0), T.TEMP t1)) =
             emit(A.OPER{assem="movq \t`s0, (`d0)\n",
-                        src=[t1], dst=[t0], jump=NONE})
+                        src=[t1, t0], dst=[t0], jump=NONE})
         | munchStm(T.MOVE(T.TEMP t0, T.MEM(T.TEMP t1))) =
             emit(A.OPER{assem="movq \t(`s0), `d0\n",
                         src=[t1], dst=[t0], jump=NONE})

@@ -10,8 +10,11 @@ structure Main = struct
         let
           val body' = F.procEntryExit1(frame, body)
           val _ = ErrorMsg.debug (Symbol.name(F.name frame) ^ ":\n")
+          val _ = print "\n### Tree before canon\n"
+          val _ = Printtree.printtree(TextIO.stdOut, body')
           val blocks = Canon.basicBlocks(Canon.linearize body')
           val stms = Canon.traceSchedule(blocks)
+          val _ = print "\n### Tree after canon\n"
           val _ = app (fn s => Printtree.printtree(TextIO.stdOut, s)) stms
 
           val instrs = List.concat(map (Amd64Codegen.codegen frame) stms)
@@ -58,7 +61,6 @@ structure Main = struct
       val _ = print "\n## Abstract Syntax Tree\n"
       val _ = PrintAbsyn.print(TextIO.stdOut, absyn)
       val frags = Tr.getResult()
-      val _ = print "\n## Tree\n"
     in
       withOpenFile (filename ^ ".s")
       (fn out => (app (emitproc out) frags))
