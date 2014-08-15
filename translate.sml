@@ -361,7 +361,10 @@ struct
           val pos = !i
         in
           i := !i + 1;
-          T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP l, T.CONST(pos * F.wordsize))), unEx field)
+          T.MOVE(T.MEM(if pos = 0 then
+            T.TEMP l
+          else
+            T.BINOP(T.PLUS, T.TEMP l, T.CONST(pos * F.wordsize))), unEx field)
         end
       val size = length fields
       val (fieldsTree) = seq(map insertField fields)

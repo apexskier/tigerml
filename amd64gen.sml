@@ -192,6 +192,16 @@ struct
         | munchStm(T.MOVE(T.MEM(T.TEMP t0), T.TEMP t1)) =
             emit(A.OPER{assem="movq \t`s0, (`d0)\n",
                         src=[t1, t0], dst=[t0], jump=NONE})
+        | munchStm(T.MOVE(T.MEM(T.TEMP t), T.CONST i)) =
+            emit(A.OPER{assem="movq \t$" ^ Int.toString i ^ ", (`d0)\n",
+                        src=nil, dst=[t], jump=NONE})
+        | munchStm(T.MOVE(T.MEM(T.NAME n), e)) =
+            ErrorMsg.impossible "tiger doesn't support direct memory access (from name)"
+        | munchStm(T.MOVE(T.MEM(T.CONST i), e)) =
+            ErrorMsg.impossible "tiger doesn't support direct memory access"
+        | munchStm(T.MOVE(T.MEM e1, e2)) =
+            emit(A.OPER{assem="movq \t`s0, (`d0)\n",
+                        src=[munchExp e2], dst=[munchExp e1], jump=NONE})
         | munchStm(T.MOVE(T.CONST j, T.MEM e)) =
             ErrorMsg.impossible "moving memory into constant"
         | munchStm(T.MOVE(T.NAME n, T.MEM e)) =
@@ -245,12 +255,15 @@ struct
                         src=munchExp e,
                         dst=t})
         | munchStm(T.MOVE(e1, e2)) =
-            emit(A.MOVE{assem="movq \t`s0, `d0\n",
-                        src=munchExp e2,
-                        dst=munchExp e1})
+            emit(A.OPER{assem="movq \t`s0, `d0\n",
+                        src=[munchExp e2], dst=[munchExp e1], jump=NONE})
 
         | munchStm(T.EXP e) =
             (munchExp e; ())
+
+        (* | munchStm tree =
+            (print "buggy tree:\n"; Printtree.printtree(TextIO.stdOut, tree);
+            ErrorMsg.impossible "unexpected statement in maximal munch algorithm") *)
 
       and munchArgs(argnum, arg::args) = (* TODO: handle more parameters than arg registers *)
             let
@@ -295,7 +308,7 @@ struct
             result(fn r => emit(A.OPER{assem="movq \t" ^ intStr i ^ "(`s0), `d0\n",
                                        src=[munchExp e], dst=[r], jump=NONE}))
         | munchExp(T.MEM e) =
-            result(fn r => emit(A.OPER{assem="movq \t(`s0), `d0\n",
+            result(fn r => emit(A.OPER{assem="movq \t(`s0), `d0 \t# watch out\n",
                                        src=[munchExp e], dst=[r], jump=NONE}))
 
         | munchExp(T.TEMP t) =
