@@ -74,21 +74,21 @@ struct
     (* create a new frame, inserting an extra parameter for the static link *)
     Level({frame=F.newFrame({name=name, formals=true :: formals}), parent=parent}, ref ())
 
-  fun formals(level) =
+  fun formals level =
     case level
       of Outer => []
        | Level({frame, parent}, _) =>
-        F.formals(frame)
+        F.formals frame
 
-  fun allocLocal(level) =
+  fun allocLocal level =
     case level
       of Outer =>
         raise Fail "Allocating locals at outermost level"
        | Level({frame, parent}, _) =>
-        (fn(g) =>
+        (fn g =>
           (level, F.allocLocal(frame)(g)))
 
-  fun getAccesses(level) =
+  fun getAccesses level =
     case level
       of Outer =>
         raise Fail "Allocating locals at outermost level"
@@ -97,7 +97,7 @@ struct
   (* Utilities *)
   val emptyEx = Ex(T.CONST 0)
 
-  (* fun runtimeErr(msg) =
+  (* fun runtimeErr msg =
     let
       val errLab = Temp.newLabel()
       val errTree =
@@ -108,9 +108,9 @@ struct
       (errLab, errTree)
     end *)
 
-  fun seq(nil) = unNx(emptyEx)
+  fun seq nil = unNx emptyEx
     | seq([s]) = s
-    | seq(h::t) = T.SEQ(h, seq(t))
+    | seq(h::t) = T.SEQ(h, seq t)
 
   and unEx(Ex e) = e
     | unEx(Cx stm) =
@@ -139,7 +139,7 @@ struct
     | unCx(Nx _) =
         error "illegal: using statement as conditional"
 
-  and unNx(Ex e) = T.EXP(e)
+  and unNx(Ex e) = T.EXP e
     | unNx(Cx stm) =
         let
           val r = Temp.newTemp()
@@ -184,19 +184,19 @@ struct
   and assignExp(var, exp) =
     Nx(T.MOVE(unEx var, unEx exp))
 
-  and breakExp(lab) =
-    Nx(T.JUMP(T.NAME(lab), [lab]))
+  and breakExp lab =
+    Nx(T.JUMP(T.NAME lab, [lab]))
 
   and callExp{name, level, funLevel, args} =
     let
       val predefs = ["print", "printint", "flush", "getchar", "ord", "chr", "size", "substring", "concat", "not", "exit"]
       val nameStr = Symbol.name name
-      fun eq(a) = a = nameStr
+      fun eq a = a = nameStr
     in
       if List.exists eq predefs then
         Ex(T.CALL(T.NAME name, List.map unEx args))
       else
-        Ex(T.CALL(T.NAME name, staticLink(level, funLevel) :: List.map unEx args))
+        Ex(T.CALL(T.NAME name, staticLink(funLevel, level) :: List.map unEx args))
     end
 
   and compareIntExp{oper, left, right} =
@@ -215,7 +215,7 @@ struct
         fn(t, f) =>
           T.CJUMP(oper', unEx left, unEx right, t, f)
     in
-      Cx(cx) (* TODO: should this produce one or zero? *)
+      Cx cx (* TODO: should this produce one or zero? *)
     end
 
   and compareNil() =
@@ -335,7 +335,7 @@ struct
                 T.LABEL finLab])
     end
 
-  and intExp(i) =
+  and intExp i =
     Ex(T.CONST i)
 
   and letExp(nil, body) =
@@ -344,16 +344,16 @@ struct
         Ex(T.ESEQ(seq(List.map unNx decs), unEx body))
 
   and newExp{attrs, level} =
-    recordExp(attrs)
+    recordExp attrs
 
   and newMethod{name, level, funLevel} =
     Ex(T.NAME name)
 
-  and recordExp(fields) =
+  and recordExp fields =
     let
       val l = Temp.newTemp()
       val i = ref 0
-      fun insertField(field) =
+      fun insertField field =
         (i := !i + 1;
         T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP l, T.CONST((!i - 1) * F.wordsize))), unEx field))
       val size = length fields
@@ -365,7 +365,7 @@ struct
                 T.TEMP l))
     end
 
-  and seqExp(nil) =
+  and seqExp nil =
         emptyEx
     | seqExp([exp]) =
         exp
@@ -383,7 +383,7 @@ struct
           error "illegal: variable access at outermost level"
     end
 
-  and stringExp(s) =
+  and stringExp s =
     let
       fun eq frag =
         case frag
