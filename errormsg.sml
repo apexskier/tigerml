@@ -14,7 +14,7 @@ end
 
 structure ErrorMsg : ERRORMSG =
 struct
-  val DEBUG = false
+  val DEBUG = true
   val anyErrors = ref false
   val fileName = ref ""
   val lineNum = ref 1

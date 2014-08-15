@@ -698,7 +698,7 @@ struct
               fun forEachDef(var, newtemps) =
                 let
                   val newtemp = T.newTemp()
-                  val _ = E.debug ("made new temp " ^ T.makeString newtemp ^ "\n")
+                  val _ = E.debug ("rewriteprogram made new temp " ^ T.makeString newtemp ^ " for def\n")
                   val tree = Tree.MOVE(Tree.TEMP newtemp, F.exp(access)(Tree.TEMP F.FP))
                   val instrs = Amd64Codegen.codegen frame tree
                 in
@@ -708,7 +708,7 @@ struct
               fun forEachUse(var, newtemps) =
                 let
                   val newtemp = T.newTemp()
-                  val _ = E.debug ("made new temp " ^ T.makeString newtemp ^ "*\n")
+                  val _ = E.debug ("rewriteprogram made new temp " ^ T.makeString newtemp ^ " for use\n")
                   val tree = Tree.MOVE(F.exp(access)(Tree.TEMP F.FP), Tree.TEMP newtemp)
                   val instrs = Amd64Codegen.codegen frame tree
                 in

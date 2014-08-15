@@ -73,7 +73,7 @@ struct
             (emit(A.OPER{assem="cmp \t`s0, $" ^ Int.toString i ^ "\n", (* TODO: this appears to be an illegal statement *)
                         src=[munchExp e],
                         dst=nil,
-                        jump=SOME[l1, l2]});
+                        jump=NONE});
             emit(A.OPER{assem=assemOperJmp oper ^ " " ^
                               (if oper = T.NE then S.name l2 else S.name l1) ^ "\n",
                         src=nil, dst=nil, jump=SOME[l1, l2]}))
@@ -110,6 +110,16 @@ struct
                         src=nil,
                         dst=[t],
                         jump=NONE})
+        | munchStm(T.MOVE(T.MEM(T.BINOP(T.PLUS, T.CONST i, e)), T.CONST j)) =
+            emit(A.OPER{assem="movq \t$" ^ Int.toString j ^ ", " ^ intStr i ^ "(`d0)\n",
+                        src=nil,
+                        dst=[munchExp e],
+                        jump=NONE})
+        | munchStm(T.MOVE(T.MEM(T.BINOP(T.PLUS, e, T.CONST i)), T.CONST j)) =
+            emit(A.OPER{assem="movq \t$" ^ Int.toString j ^ ", " ^ intStr i ^ "(`d0)\n",
+                        src=nil,
+                        dst=[munchExp e],
+                        jump=NONE})
         | munchStm(T.MOVE(T.MEM(T.BINOP(T.PLUS, T.CONST i, T.TEMP t)), T.NAME n)) =
             emit(A.OPER{assem="movq \t$" ^ S.name n ^ ", " ^ intStr i ^ "(`d0)\n",
                         src=nil,
@@ -119,6 +129,16 @@ struct
             emit(A.OPER{assem="movq \t$" ^ S.name n ^ ", " ^ intStr i ^ "(`d0)\n",
                         src=nil,
                         dst=[t],
+                        jump=NONE})
+        | munchStm(T.MOVE(T.MEM(T.BINOP(T.PLUS, T.CONST i, e)), T.NAME n)) =
+            emit(A.OPER{assem="movq \t$" ^ S.name n ^ ", " ^ intStr i ^ "(`d0)\n",
+                        src=nil,
+                        dst=[munchExp e],
+                        jump=NONE})
+        | munchStm(T.MOVE(T.MEM(T.BINOP(T.PLUS, e, T.CONST i)), T.NAME n)) =
+            emit(A.OPER{assem="movq \t$" ^ S.name n ^ ", " ^ intStr i ^ "(`d0)\n",
+                        src=nil,
+                        dst=[munchExp e],
                         jump=NONE})
         | munchStm(T.MOVE(T.MEM(T.BINOP(T.PLUS, T.CONST i, T.TEMP t)), T.TEMP n)) =
             emit(A.OPER{assem="movq \t`s0, " ^ intStr i ^ "(`d0)\n",
@@ -130,6 +150,16 @@ struct
                         src=[n],
                         dst=[t],
                         jump=NONE})
+        | munchStm(T.MOVE(T.MEM(T.BINOP(T.PLUS, T.CONST i, e)), T.TEMP n)) =
+            emit(A.OPER{assem="movq \t`s0, " ^ intStr i ^ "(`d0)\n",
+                        src=[n],
+                        dst=[munchExp e],
+                        jump=NONE})
+        | munchStm(T.MOVE(T.MEM(T.BINOP(T.PLUS, e, T.CONST i)), T.TEMP n)) =
+            emit(A.OPER{assem="movq \t`s0, " ^ intStr i ^ "(`d0)\n",
+                        src=[n],
+                        dst=[munchExp e],
+                        jump=NONE})
         | munchStm(T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP t, T.CONST i)), e)) =
             emit(A.OPER{assem="movq \t`s0, " ^ intStr i ^ "(`d0)\n",
                         src=[munchExp e],
@@ -139,6 +169,44 @@ struct
             emit(A.OPER{assem="movq \t`s0, " ^ intStr i ^ "(`d0)\n",
                         src=[munchExp e],
                         dst=[t],
+                        jump=NONE})
+        | munchStm(T.MOVE(T.MEM(T.BINOP(T.PLUS, e1, T.CONST i)), e2)) =
+            emit(A.OPER{assem="movq \t`s0, " ^ intStr i ^ "(`d0)\n",
+                        src=[munchExp e2],
+                        dst=[munchExp e1],
+                        jump=NONE})
+        | munchStm(T.MOVE(T.MEM(T.BINOP(T.PLUS, T.CONST i, e1)), e2)) =
+            emit(A.OPER{assem="movq \t`s0, " ^ intStr i ^ "(`d0)\n",
+                        src=[munchExp e2],
+                        dst=[munchExp e1],
+                        jump=NONE})
+        | munchStm(T.MOVE(T.CONST j, T.MEM(T.BINOP(T.PLUS, T.CONST i, T.TEMP t)))) =
+            ErrorMsg.impossible "moving memory into constant"
+        | munchStm(T.MOVE(T.CONST j, T.MEM(T.BINOP(T.PLUS, T.TEMP t, T.CONST i)))) =
+            ErrorMsg.impossible "moving memory into constant"
+        | munchStm(T.MOVE(T.NAME n, T.MEM(T.BINOP(T.PLUS, T.CONST i, T.TEMP t)))) =
+            ErrorMsg.impossible "moving memory into name"
+        | munchStm(T.MOVE(T.NAME n, T.MEM(T.BINOP(T.PLUS, T.TEMP t, T.CONST i)))) =
+            ErrorMsg.impossible "moving memory into name"
+        | munchStm(T.MOVE(T.TEMP n, T.MEM(T.BINOP(T.PLUS, T.CONST i, T.TEMP t)))) =
+            emit(A.OPER{assem="movq \t" ^ intStr i ^ "(`d0), `s0\n",
+                        src=[t],
+                        dst=[n],
+                        jump=NONE})
+        | munchStm(T.MOVE(T.TEMP n, T.MEM(T.BINOP(T.PLUS, T.TEMP t, T.CONST i)))) =
+            emit(A.OPER{assem="movq \t" ^ intStr i ^ "(`d0), `s0\n",
+                        src=[t],
+                        dst=[n],
+                        jump=NONE})
+        | munchStm(T.MOVE(e, T.MEM(T.BINOP(T.PLUS, T.TEMP t, T.CONST i)))) =
+            emit(A.OPER{assem="movq \t" ^ intStr i ^ "(`d0), `s0\n",
+                        src=[t],
+                        dst=[munchExp e],
+                        jump=NONE})
+        | munchStm(T.MOVE(e, T.MEM(T.BINOP(T.PLUS, T.CONST i, T.TEMP t)))) =
+            emit(A.OPER{assem="movq \t" ^ intStr i ^ "(`d0), `s0\n",
+                        src=[t],
+                        dst=[munchExp e],
                         jump=NONE})
         | munchStm(T.MOVE(T.MEM(T.TEMP t0), T.TEMP t1)) =
             emit(A.OPER{assem="movq \t`s0, (`d0)\n",
@@ -150,8 +218,6 @@ struct
             (case oper
               of T.DIV =>
                 ErrorMsg.impossible "not implemented" (* munchDiv() *)
-               | T.MUL =>
-                ErrorMsg.impossible "not implemented" (* munchMul() *)
                | _ =>
                 if t1 = t0 then
                   emit(A.OPER{assem=assemOper oper ^ " \t$" ^ Int.toString i ^ ", `s0 \t# coalescing a temp to const + temp instruction\n",
@@ -160,13 +226,11 @@ struct
                   (emit(A.MOVE{assem="movq \t`s0, `d0\n",
                               src=t1, dst=t0});
                   emit(A.OPER{assem=assemOper oper ^ " \t$" ^ Int.toString i ^ ", `d0\n",
-                              src=[t1], dst=[t0], jump=NONE})))
+                              src=[t0], dst=[t0], jump=NONE})))
         | munchStm(T.MOVE(T.TEMP t0, T.BINOP(oper, T.TEMP t1, T.CONST i))) =
             (case oper
               of T.DIV =>
                 ErrorMsg.impossible "not implemented" (* munchDiv() *)
-               | T.MUL =>
-                ErrorMsg.impossible "not implemented" (* munchMul() *)
                | _ =>
                 if t1 = t0 then
                   emit(A.OPER{assem=assemOper oper ^ " \t$" ^ Int.toString i ^ ", `s0 \t# coalescing a temp to temp + const instruction\n",
@@ -174,27 +238,25 @@ struct
                 else
                   (emit(A.MOVE{assem="movq \t`s0, `d0\n",
                               src=t1, dst=t0});
-                  emit(A.OPER{assem=assemOper oper ^ " \t$" ^ Int.toString i ^ ", `d0\n",
-                              src=[t1], dst=[t0], jump=NONE})))
+                  emit(A.OPER{assem=assemOper oper ^ " \t$" ^ Int.toString i ^ ", `d0 \t# test\n",
+                              src=[t0], dst=[t0], jump=NONE})))
         | munchStm(T.MOVE(T.TEMP t0, T.BINOP(oper, T.TEMP t1, T.TEMP t2))) =
             (case oper
               of T.DIV =>
                 ErrorMsg.impossible "not implemented" (* munchDiv() *)
-               | T.MUL =>
-                ErrorMsg.impossible "not implemented" (* munchMul() *)
                | _ =>
                 if t0 = t1 then
                   emit(A.OPER{assem=assemOper oper ^ " \t`s1, `d0 \t# coalescing a temp to temp + temp instruction\n",
-                              src=[t0, t2], dst=[t0], jump=NONE})
+                              src=[t2, t1], dst=[t0], jump=NONE})
                 else
                   if t0 = t2 then
                     emit(A.OPER{assem=assemOper oper ^ " \t`s1, `d0 \t# coalescing a temp to temp + temp instruction\n",
-                                src=[t0, t1], dst=[t0], jump=NONE})
+                                src=[t1, t2], dst=[t0], jump=NONE})
                   else
                     (emit(A.MOVE{assem="movq \t`s0, `d0 \t# src: "^Temp.makeString t2^" dst: "^Temp.makeString t0^"\n",
                                 src=t2, dst=t0});
                     emit(A.OPER{assem=assemOper oper ^ " \t`s0, `d0 \t# didn't coalesce src: "^Temp.makeString t1^" dst: "^Temp.makeString t0^"\n",
-                                src=[t1, t0], dst=[t0, t2], jump=NONE})))
+                                src=[t1, t0], dst=[t0], jump=NONE})))
         | munchStm(T.MOVE(T.TEMP t, T.CONST i)) =
             emit(A.OPER{assem="movq \t$" ^ Int.toString i ^ ", `d0\n",
                         src=nil,
@@ -231,25 +293,22 @@ struct
                     src=[munchExp right, F.RV], dst=[F.RV, F.DivReg], jump=NONE});
         F.RV)
 
-      and munchMul(left, right) =
-        ErrorMsg.impossible "TODO: multiplication not implemented"
-
       and munchExp(T.BINOP(oper, e1, e2)) =
-            (case oper
-              of T.DIV =>
-                result(fn r =>
-                  emit(A.MOVE{assem="movq \t`s0, `d0\n",
-                              src=munchDiv(e1, e2), dst=r}))
-               | _ =>
-                let
-                  val e1' = munchExp e1
-                  val e2' = munchExp e2
-                in
-                  result(fn r => (emit(A.MOVE{assem="movq \t`s0, `d0\n",
-                                              src=e1', dst=r});
-                                 emit(A.OPER{assem=assemOper oper ^ " \t`s0, `d0\n",
-                                              src=[e2', e1'], dst=[r], jump=NONE})))
-                end)
+            result(fn r =>
+              (case oper
+                of T.DIV =>
+                    emit(A.MOVE{assem="movq \t`s0, `d0\n",
+                                src=munchDiv(e1, e2), dst=r})
+                 | _ =>
+                  let
+                    val e1' = munchExp e1
+                    val e2' = munchExp e2
+                  in
+                    (emit(A.MOVE{assem="movq \t`s0, `d0\n",
+                                                src=e1', dst=r});
+                     emit(A.OPER{assem=assemOper oper ^ " \t`s0, `d0\n",
+                                  src=[e2', e1'], dst=[r], jump=NONE}))
+                  end))
 
         | munchExp(T.MEM(T.BINOP(T.PLUS, e, T.CONST i))) =
             result(fn r => emit(A.OPER{assem="movq \t" ^ intStr i ^ "(`s0), `d0\n",
