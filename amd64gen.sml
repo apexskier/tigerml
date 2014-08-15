@@ -34,6 +34,18 @@ struct
            | T.ULE => "jbe"
            | T.UGT => "ja"
            | T.UGE => "jae")
+      fun assemOperRev(oper) =
+        (case oper (* TODO: Test these *)
+          of T.EQ => T.NE
+           | T.NE => T.EQ
+           | T.LT => T.GE
+           | T.GT => T.LE
+           | T.LE => T.GT
+           | T.GE => T.LT
+           | T.ULT => T.UGT
+           | T.ULE => T.UGE
+           | T.UGT => T.ULE
+           | T.UGE => T.ULT)
 
       fun assemOper(oper) =
         (case oper
@@ -70,11 +82,11 @@ struct
             end
 
         | munchStm(T.CJUMP(oper, T.CONST i, e, l1, l2)) =
-            (emit(A.OPER{assem="cmp \t`s0, $" ^ Int.toString i ^ "\n", (* TODO: this appears to be an illegal statement *)
+            (emit(A.OPER{assem="cmp \t$" ^ Int.toString i ^ ", `s0\n",
                         src=[munchExp e],
                         dst=nil,
                         jump=NONE});
-            emit(A.OPER{assem=assemOperJmp oper ^ " " ^ S.name l1 ^ "\n",
+            emit(A.OPER{assem=assemOperJmp(assemOperRev oper) ^ " " ^ S.name l1 ^ "\n",
                         src=nil, dst=nil, jump=SOME[l1, l2]}))
         | munchStm(T.CJUMP(oper, e, T.CONST i, l1, l2)) =
             (emit(A.OPER{assem="cmp \t$" ^ Int.toString i ^ ", `s0\n",
