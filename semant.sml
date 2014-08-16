@@ -8,10 +8,10 @@ sig
   type expty = {exp:Translate.exp, ty:Types.ty}
   type envres = {venv:venv, tenv:tenv, cenv:cenv, exps:Translate.exp list}
 
-  val transVar : venv * tenv * cenv * Absyn.var * Translate.level -> expty
-  val transExp : venv * tenv * cenv * Absyn.exp * Translate.level * Temp.label -> expty
-  val transDec : venv * tenv * cenv * Absyn.dec * Translate.exp list * Translate.level -> envres
-  val transDecs : venv * tenv * cenv * Absyn.dec list * Translate.level -> envres
+  val transVar : venv * tenv * cenv * Absyn.var * Translate.level * bool -> expty
+  val transExp : venv * tenv * cenv * Absyn.exp * Translate.level * Temp.label * bool-> expty
+  val transDec : venv * tenv * cenv * Absyn.dec * Translate.exp list * Translate.level * bool -> envres
+  val transDecs : venv * tenv * cenv * Absyn.dec list * Translate.level * bool -> envres
   val transTy : tenv * Absyn.ty -> Types.ty
 end
 
@@ -85,7 +85,7 @@ struct
        | T.CLASS _ => "class"
 
   (* Main visible functions *)
-  fun transVar(venv, tenv, cenv, var, level) =
+  fun transVar(venv, tenv, cenv, var, level, class) =
     let
       fun trvar(A.SimpleVar(id, pos)) =
             (case S.look(venv, id)
@@ -94,8 +94,12 @@ struct
                  (error pos ("function name used as var: '" ^ S.name id ^ "'");
                  errExpty)
                | NONE =>
-                 (error pos ("unknown variable '" ^ S.name id ^ "'");
-                 errExpty))
+                if class then
+                  (* use a reference to the class instance *)
+                  trvar(A.FieldVar(A.SimpleVar(S.symbol "self", pos), id, pos))
+                else
+                  (error pos ("unknown variable '" ^ S.name id ^ "'");
+                  errExpty))
         | trvar(A.FieldVar(var, id, pos)) =
             let
               val {exp=varExp, ty=varTy} = trvar var
@@ -143,7 +147,7 @@ struct
                           (error pos ("accessing class method '" ^ S.name id ^ "' as class variable");
                           errExpty)
                          | NONE =>
-                          (error pos ("class variable '" ^ S.name id ^"' not found");
+                          (error pos ("class variable '" ^ S.name id ^ "' not found");
                           errExpty)
                     end
                  | _ => (
@@ -153,7 +157,7 @@ struct
         | trvar(A.SubscriptVar(var, exp, pos)) =
             let
               val {exp=varExp, ty=varTy} = trvar var
-              val {exp=expExp, ty=expTy} = transExp(venv, tenv, cenv, exp, level, noBreak)
+              val {exp=expExp, ty=expTy} = transExp(venv, tenv, cenv, exp, level, noBreak, class)
             in
               if tyEq(expTy, T.INT) then
                 case varTy
@@ -168,10 +172,10 @@ struct
       trvar var
     end
 
-  and transExp(venv, tenv, cenv, exp, level, brkAlw) =
+  and transExp(venv, tenv, cenv, exp, level, brkAlw, class) =
     let
       fun trexp(A.VarExp var) =
-            transVar(venv, tenv, cenv, var, level)
+            transVar(venv, tenv, cenv, var, level, class)
         | trexp(A.NilExp) =
             {exp=Tr.emptyEx, ty=T.NIL}
         | trexp(A.IntExp i) =
@@ -326,7 +330,7 @@ struct
                 end)
         | trexp(A.AssignExp{var, exp, pos}) =
             let
-              val {exp=varExp, ty=varTy} = transVar(venv, tenv, cenv, var, level)
+              val {exp=varExp, ty=varTy} = transVar(venv, tenv, cenv, var, level, class)
               val {exp=expExp, ty=expTy} = trexp exp
             in
               (if tyEq(varTy, expTy) then ()
@@ -363,7 +367,7 @@ struct
             let
               val finLab = Temp.newLabel()
               val {exp=testExp, ty=tTy} = trexp test
-              val {exp=bodyExp, ty=bTy} = transExp(venv, tenv, cenv, body, level, finLab)
+              val {exp=bodyExp, ty=bTy} = transExp(venv, tenv, cenv, body, level, finLab, class)
               val _ =
                 if tyEq(T.INT, tTy) then ()
                 else
@@ -380,7 +384,7 @@ struct
               val finLab = Temp.newLabel()
               val idxAcc = Tr.allocLocal(level)(!escape)
               val {exp=bodyExp, ty=bTy} =
-                transExp(S.enter(venv, var, E.VarEntry{access=idxAcc, ty=T.INT}), tenv, cenv, body, level, finLab)
+                transExp(S.enter(venv, var, E.VarEntry{access=idxAcc, ty=T.INT}), tenv, cenv, body, level, finLab, class)
               val {exp=loExp, ty=loTy} = trexp lo
               val {exp=hiExp, ty=hiTy} = trexp hi
               val _ =
@@ -406,8 +410,8 @@ struct
               errExpty)
         | trexp(A.LetExp{decs, body, pos}) =
             let
-              val {venv=venv', tenv=tenv', cenv=cenv', exps=exps'} = transDecs(venv, tenv, cenv, decs, level)
-              val {exp=bodyexp, ty=ty} = transExp(venv', tenv', cenv', body, level, brkAlw)
+              val {venv=venv', tenv=tenv', cenv=cenv', exps=exps'} = transDecs(venv, tenv, cenv, decs, level, false)
+              val {exp=bodyexp, ty=ty} = transExp(venv', tenv', cenv', body, level, brkAlw, class)
             in
               {exp=Tr.letExp(exps', bodyexp), ty=ty}
             end
@@ -432,7 +436,7 @@ struct
             end
         | trexp(A.MethodExp{var, name, args, pos}) =
             let
-              val {exp=varExp, ty} = transVar(venv, tenv, cenv, var, level)
+              val {exp=varExp, ty} = transVar(venv, tenv, cenv, var, level, class)
             in
               case ty
                 of T.CLASS(s, parent, _) =>
@@ -535,15 +539,15 @@ struct
       trexp exp
     end
 
-  and transDecs(venv, tenv, cenv, decs, level) =
+  and transDecs(venv, tenv, cenv, decs, level, class) =
     let
       fun trdecs(dec, {venv=venv', tenv=tenv', cenv=cenv', exps=exps'}) =
-        transDec(venv', tenv', cenv', dec, exps', level)
+        transDec(venv', tenv', cenv', dec, exps', level, class)
     in
       foldl trdecs {venv=venv, tenv=tenv, cenv=cenv, exps=nil} decs
     end
 
-  and transDec(venv, tenv, cenv, dec, exps, level) =
+  and transDec(venv, tenv, cenv, dec, exps, level, class) =
     let
       fun trdec(A.FunctionDec fundecs) =
             let
@@ -593,7 +597,7 @@ struct
                   fun addParam((name, ty, escape), access, venv') =
                     S.enter(venv', name, E.VarEntry{access=access, ty=ty})
                   val bodyEnv = ListPair.foldl addParam recEnv (formals, accesses)
-                  val {exp=bodyExp, ty=bodyTy} = transExp(bodyEnv, tenv, cenv, body, newLevel, noBreak)
+                  val {exp=bodyExp, ty=bodyTy} = transExp(bodyEnv, tenv, cenv, body, newLevel, noBreak, class)
                 in
                   if tyEq(resultTy, bodyTy) then
                     Tr.procEntryExit(newLevel, bodyExp, if tyEq(resultTy, T.UNIT) then false else true)
@@ -606,12 +610,14 @@ struct
             end
         | trdec(A.VarDec{name, escape, typ, init, pos}) =
             let
-              val {exp=initExp, ty=initTy} = transExp(venv, tenv, cenv, init, level, noBreak)
+              val {exp=initExp, ty=initTy} = transExp(venv, tenv, cenv, init, level, noBreak, class)
               fun eq(a) =
                 a = S.name name
               val access = Tr.allocLocal(level)(!escape)
               val initExp' = Tr.varDec{init=initExp, level=level, access=access}
-              val ret = {venv=S.enter(venv, name, E.VarEntry{access=access, ty=initTy}),
+              val ret = {venv=if class then venv (* Don't enter into venv, we'll transform these into self.name unless there's an override *)
+                              else
+                                S.enter(venv, name, E.VarEntry{access=access, ty=initTy}),
                          tenv=tenv,
                          cenv=cenv,
                          exps=exps @ [initExp']}
@@ -620,24 +626,20 @@ struct
               * to a field off of self, rather than to a real locally allocated
               * variable *)
 
-              (* if List.exists eq reservedWords then
-                (error pos ("'" ^ S.name name ^ "' is a reserved word");
-                {venv=venv, tenv=tenv})
-              else *)
-                case typ
-                  of SOME(tyName, tyPos) =>
-                    (case S.look(tenv, tyName)
-                      of SOME(ty) =>
-                        if tyEq(initTy, ty) then ()
-                        else error pos ("variable '" ^ S.name name ^ "' type '" ^ S.name tyName ^ "' doesn't match initialization")
-                       | NONE =>
-                        error pos ("unknown type '" ^ S.name tyName ^ "' in variable '" ^ S.name name ^ "' declaration"))
-                   | NONE =>
-                    if initTy = T.NIL then
-                      error pos ("initializing non-record variable '" ^ S.name name ^ "' to nil: '" ^ S.name name ^ "'")
-                    else
-                      ();
-                ret
+              case typ
+                of SOME(tyName, tyPos) =>
+                  (case S.look(tenv, tyName)
+                    of SOME(ty) =>
+                      if tyEq(initTy, ty) then ()
+                      else error pos ("variable '" ^ S.name name ^ "' type '" ^ S.name tyName ^ "' doesn't match initialization")
+                     | NONE =>
+                      error pos ("unknown type '" ^ S.name tyName ^ "' in variable '" ^ S.name name ^ "' declaration"))
+                 | NONE =>
+                  if initTy = T.NIL then
+                    error pos ("initializing non-record variable '" ^ S.name name ^ "' to nil: '" ^ S.name name ^ "'")
+                  else
+                    ();
+              ret
             end
         | trdec(A.TypeDec tydecs) =
             let
@@ -701,7 +703,7 @@ struct
               val classCenv = S.enter(cenv, name, envclass)
 
               val {venv=venv', tenv=tenv', cenv=cenv', exps=exps'} =
-                transDecs(classVenv, classTenv, classCenv, attributes, level)
+                transDecs(classVenv, classTenv, classCenv, attributes, level, true)
 
               fun lookUpAttr(A.FunctionDec fundecs, attrs) =
                     let
@@ -712,7 +714,7 @@ struct
                     end
                 | lookUpAttr(A.VarDec{name, escape, typ, init, pos}, attrs) =
                     (name, valOf(S.look(venv', name))) :: attrs
-                | lookUpAttr(_) = ErrorMsg.impossible "ClassDec or TypeDec in class attributes"
+                | lookUpAttr(_, attrs) = (name, E.VarEntry{access=selfAccess, ty=T.UNIT}) :: attrs
               val attrs = foldl lookUpAttr nil attributes
 
               val envclass' =
@@ -763,7 +765,7 @@ struct
       val startLevel = Tr.newLevel{parent=Tr.outermost, name=Temp.namedLabel("tigermain"), formals=[]}
     in
       Tr.procEntryExit(startLevel,
-                       getExp(transExp(E.base_venv, E.base_tenv, E.base_cenv, exp, startLevel, noBreak)),
+                       getExp(transExp(E.base_venv, E.base_tenv, E.base_cenv, exp, startLevel, noBreak, false)),
                        true)
     end
 

@@ -24,7 +24,7 @@ struct
                   else ()
                 else ()
                | NONE =>
-                error ("findEscape error: variable '" ^ S.name name ^ "' not found"))
+                ()) (* An error will be produced in semant *)
         | trvar(A.FieldVar(var, fieldname, pos)) =
             trvar var
         | trvar(A.SubscriptVar(var, exp, pos)) =
@@ -88,7 +88,7 @@ struct
             ()
         | trexp(A.LetExp{decs, body, pos}) =
             let
-              val env' = traverseDecs(env, d+1, decs)
+              val env' = traverseDecs(env, d+1, decs, false)
             in
               traverseExp(env', d, body)
             end
@@ -103,7 +103,7 @@ struct
       trexp s
     end
 
-  and traverseDec(env:escEnv, d:depth, s:Absyn.dec):escEnv =
+  and traverseDec(env:escEnv, d:depth, s:Absyn.dec, class:bool):escEnv =
     let
       fun trdec(A.FunctionDec fundecs) =
             let
@@ -124,22 +124,22 @@ struct
             let
               val env' = S.enter(env, name, (d, escape))
             in
-              escape := false;
+              escape := class;
               traverseExp(env, d, init);
               env'
             end
         | trdec(A.TypeDec decs) =
             env
         | trdec(A.ClassDec{name, parent, attributes, pos}) =
-            traverseDecs(env, d, attributes)
+            traverseDecs(env, d, attributes, true)
     in
       trdec s
     end
 
-  and traverseDecs(env:escEnv, d:depth, s:Absyn.dec list):escEnv =
+  and traverseDecs(env:escEnv, d:depth, s:Absyn.dec list, class:bool):escEnv =
     let
       fun trdecs(dec, env) =
-        traverseDec(env, d+1, dec)
+        traverseDec(env, d+1, dec, class)
     in
       foldl trdecs env s
     end

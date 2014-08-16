@@ -350,7 +350,7 @@ struct
     recordExp attrs
 
   and newMethod{name, level, funLevel} =
-    Ex(T.NAME name)
+    Ex(T.NAME name) (* TODO *)
 
   and recordExp fields =
     let
