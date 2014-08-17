@@ -82,7 +82,7 @@ struct
        | T.CLASS _ => "class"
 
   (* Main visible functions *)
-  fun transVar(venv, tenv, cenv, var, level, class:Env.classentry option) =
+  fun transVar(venv, tenv, cenv, var, level, class:E.classentry option) =
     let
       fun trvar(A.SimpleVar(id, pos)) =
             (case S.look(venv, id)
@@ -139,8 +139,7 @@ struct
                                 of m as SOME(symbol, entry) => SOME(entry)
                                  | NONE => matchAttr parent')
                              | NONE =>
-                              (error pos ("class attribute '" ^ S.name id ^ "' not found");
-                              NONE)
+                              NONE
                         end
                       val matchedAttr = matchAttr class'
                     in
@@ -175,7 +174,7 @@ struct
       trvar var
     end
 
-  and transExp(venv, tenv, cenv, exp, level, brkAlw, class:Env.classentry option) =
+  and transExp(venv, tenv, cenv, exp, level, brkAlw, class:E.classentry option) =
     let
       fun trexp(A.VarExp var) =
             transVar(venv, tenv, cenv, var, level, class)
@@ -447,11 +446,14 @@ struct
                   (* find a matching class attribute *)
                   (* verify attribute is a method *)
                   let
-                    val class as E.ClassEntry{parent, attributes} =
-                      case S.look(cenv, s)
-                        of SOME(class) => class
+                    val class' as E.ClassEntry{parent, attributes} =
+                      case class
+                        of SOME c => c
                          | NONE =>
-                          ErrorMsg.impossible ("class '" ^ S.name s ^ "' of variable not found")
+                          case S.look(cenv, s)
+                            of SOME c => c
+                             | NONE =>
+                              ErrorMsg.impossible ("class '" ^ S.name s ^ "' of variable not found")
                     fun matchAttr(E.ClassEntry{parent, attributes}) =
                       let
                         fun eq(attrname, enventry) =
@@ -463,10 +465,9 @@ struct
                               of m as SOME(symbol, entry) => SOME(entry)
                                | NONE => matchAttr parent')
                            | NONE =>
-                            (error pos ("class attribute '" ^ S.name name ^ "' not found");
-                            NONE)
+                            NONE
                       end
-                    val matchedAttr = matchAttr(class)
+                    val matchedAttr = matchAttr class'
                   in
                     case matchedAttr
                       of SOME(E.FunEntry{level=funlevel, label, formals, result=resultTy}) =>
@@ -556,8 +557,7 @@ struct
     let
       fun trdec(A.FunctionDec fundecs) =
             let
-              val _ = print "enter functiondec\n"
-              fun basicFunDec({name, params, result, body, pos}, (funcs, venv, levels)) =
+              fun basicFunDec({name, params, result, body, pos}, (funcs, venv, levels, class')) =
                 let
                   val label = Temp.newLabel()(* DEBUG: Temp.namedLabel(Symbol.name name) *)
                   fun getEscape{name, escape, typ, pos} =
@@ -590,12 +590,18 @@ struct
                       error pos ("redeclaring function in contiguous function declarations: '" ^ S.name name ^ "'")
                     else ()
 
-                  val funcEnv = S.enter(venv, name, E.FunEntry{level=level, label=label, formals=paramsTys, result=resultTy})
+                  val enventry = E.FunEntry{level=level, label=label, formals=paramsTys, result=resultTy}
+                  val funcEnv = S.enter(venv, name, enventry)
                   val funcList = ((name, params, result, body, pos), paramlist, resultTy) :: funcs
+                  val class'' =
+                    case class'
+                      of SOME(E.ClassEntry{parent, attributes}) =>
+                        SOME(E.ClassEntry{parent=parent, attributes=(name, enventry) :: attributes})
+                       | NONE => class'
                 in
-                  (funcList, funcEnv, newLevel :: levels)
+                  (funcList, funcEnv, newLevel :: levels, class'')
                 end
-              val (funcList, recEnv, levels) = foldr basicFunDec (nil, venv, nil) fundecs
+              val (funcList, recEnv, levels, class') = foldr basicFunDec (nil, venv, nil, class) fundecs
 
               fun checkFunc(((name, params, result, body, pos), formals, resultTy), newLevel) =
                 let
@@ -612,11 +618,10 @@ struct
                 end
               val _ = ListPair.appEq checkFunc (funcList, levels)
             in
-              ({venv=recEnv, tenv=tenv, cenv=cenv, exps=exps}, class)
+              ({venv=recEnv, tenv=tenv, cenv=cenv, exps=exps}, class')
             end
         | trdec(A.VarDec{name, escape, typ, init, pos}) =
             let
-              val _ = print "enter vardec\n"
               val {exp=initExp, ty=initTy} = transExp(venv, tenv, cenv, init, level, noBreak, class)
               fun eq(a) =
                 a = S.name name
@@ -627,10 +632,11 @@ struct
                             of SOME _ => venv
                              (* Don't enter into venv, we'll transform these into self.name unless there's an override *)
                              | NONE => S.enter(venv, name, enventry)
-              val class' = case class
-                             of SOME(Env.ClassEntry{parent, attributes}) =>
-                               SOME(Env.ClassEntry{parent=parent, attributes=(name, enventry) :: attributes})
-                              | NONE => class
+              val class' =
+                case class
+                  of SOME(E.ClassEntry{parent, attributes}) =>
+                    SOME(E.ClassEntry{parent=parent, attributes=(name, enventry) :: attributes})
+                   | NONE => class
             in
               case typ
                 of SOME(tyName, tyPos) =>
