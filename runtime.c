@@ -44,18 +44,20 @@ int stringEqual(struct string *s, struct string *t) {
  * Standard Library
  * */
 
+void flush() {
+    fflush(stdout);
+}
+
 void print(struct string *s) {
     int i;
     unsigned char *p = s->chars;
     for (i = 0; i < s->length; i++, p++) putchar(*p);
+    flush();
 }
 
 void printint(int i) {
     printf("%d", i);
-}
-
-void flush() {
-    fflush(stdout);
+    flush(); /* NOTE: flushing output buffer for easier debugging. */
 }
 
 struct string consts[256];

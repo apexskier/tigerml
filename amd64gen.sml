@@ -229,9 +229,12 @@ struct
         | munchStm(T.MOVE(T.TEMP t0, T.MEM(T.TEMP t1))) =
             emit(A.OPER{assem="movq \t(`s0), `d0\n",
                         src=[t1], dst=[t0], jump=NONE})
-        | munchStm(T.MOVE(T.TEMP t, T.MEM(e))) =
+        | munchStm(T.MOVE(T.TEMP t, T.MEM e)) =
             emit(A.OPER{assem="movq \t(`s0), `d0\n",
                         src=[munchExp e], dst=[t], jump=NONE})
+        | munchStm(T.MOVE(e1, T.MEM e2)) =
+            emit(A.OPER{assem="movq \t(`s0), `d0\t#testing \n",
+                        src=[munchExp e2], dst=[munchExp e1], jump=NONE})
         | munchStm(T.MOVE(T.TEMP t0, T.BINOP(oper, T.CONST i, T.TEMP t1))) =
             (case oper
               of T.DIV =>
@@ -302,13 +305,14 @@ struct
                   end))
 
         | munchExp(T.MEM(T.BINOP(T.PLUS, e, T.CONST i))) =
-            result(fn r => emit(A.OPER{assem="movq \t" ^ intStr i ^ "(`s0), `d0\n",
+            result(fn r => emit(A.OPER{assem="movq \t" ^ intStr i ^ "(`s0), `d0 \t# mem exp\n",
                                        src=[munchExp e], dst=[r], jump=NONE}))
         | munchExp(T.MEM(T.BINOP(T.PLUS, T.CONST i, e))) =
-            result(fn r => emit(A.OPER{assem="movq \t" ^ intStr i ^ "(`s0), `d0\n",
+            result(fn r => emit(A.OPER{assem="movq \t" ^ intStr i ^ "(`s0), `d0 \t# mem exp\n",
                                        src=[munchExp e], dst=[r], jump=NONE}))
         | munchExp(T.MEM e) =
-            result(fn r => emit(A.OPER{assem="movq \t(`s0), `d0 \t# watch out\n",
+            result(fn r => emit(A.OPER{assem=if true then "movq \t(`s0), `d0 \t# mem exp \t# watch out\n"
+                                             else "movq \t(`s0), `d0 \t# watch out\n",
                                        src=[munchExp e], dst=[r], jump=NONE}))
 
         | munchExp(T.TEMP t) =
