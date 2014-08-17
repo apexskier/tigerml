@@ -10,7 +10,7 @@ sig
   val transVar : venv * tenv * cenv * Absyn.var * Translate.level * Env.classentry option -> expty
   val transExp : venv * tenv * cenv * Absyn.exp * Translate.level * Temp.label * Env.classentry option -> expty
   val transDec : venv * tenv * cenv * Absyn.dec * Translate.exp list * Translate.level * Env.classentry option -> {venv:venv, tenv:tenv, cenv:cenv, exps:Translate.exp list} * Env.classentry option
-  val transDecs : venv * tenv * cenv * Absyn.dec list * Translate.level * Env.classentry option -> {venv:venv, tenv:tenv, cenv:cenv, exps:Translate.exp list}
+  val transDecs : venv * tenv * cenv * Absyn.dec list * Translate.level * Env.classentry option -> {venv:venv, tenv:tenv, cenv:cenv, exps:Translate.exp list} * Env.classentry option
   val transTy : tenv * Absyn.ty -> Types.ty
 end
 
@@ -413,7 +413,7 @@ struct
               errExpty)
         | trexp(A.LetExp{decs, body, pos}) =
             let
-              val {venv=venv', tenv=tenv', cenv=cenv', exps=exps'} = transDecs(venv, tenv, cenv, decs, level, NONE)
+              val ({venv=venv', tenv=tenv', cenv=cenv', exps=exps'}, class) = transDecs(venv, tenv, cenv, decs, level, NONE)
               val {exp=bodyexp, ty=ty} = transExp(venv', tenv', cenv', body, level, brkAlw, class)
             in
               {exp=Tr.letExp(exps', bodyexp), ty=ty}
@@ -548,9 +548,8 @@ struct
     let
       fun trdecs(dec, ({venv=venv', tenv=tenv', cenv=cenv', exps=exps'}, class')) =
         transDec(venv', tenv', cenv', dec, exps', level, class')
-      val (return, class') = foldl trdecs ({venv=venv, tenv=tenv, cenv=cenv, exps=nil}, class) decs
     in
-      return
+      foldl trdecs ({venv=venv, tenv=tenv, cenv=cenv, exps=nil}, class) decs
     end
 
   and transDec(venv, tenv, cenv, dec, exps, level, class) =
@@ -711,38 +710,17 @@ struct
               val envclass =
                 E.ClassEntry{parent=SOME(parentClassEntry), attributes=nil}
 
-              val {venv=venv', tenv=tenv', cenv=cenv', exps=exps'} =
+              val ({venv=venv', tenv=tenv', cenv=cenv', exps=exps'}, envclass') =
                 transDecs(classVenv, classTenv, cenv, attributes, level, SOME(envclass))
 
-              fun lookUpAttr(A.FunctionDec fundecs, attrs) =
-                    let
-                      val enventry =
-                        case S.look(venv', name)
-                          of SOME e => e
-                           | NONE => ErrorMsg.impossible ("didn't find function '" ^ S.name name ^ "' environment entry")
-                      fun lookUpFundec({name, params, result, body, pos}) =
-                        (name, enventry)
-                    in
-                      map lookUpFundec(fundecs) @ attrs
-                    end
-                | lookUpAttr(A.VarDec{name, escape, typ, init, pos}, attrs) =
-                    let
-                      val enventry =
-                        case S.look(venv', name)
-                          of SOME e => e
-                           | NONE => ErrorMsg.impossible ("didn't find var '" ^ S.name name ^ "' environment entry")
-                    in
-                      (name, enventry) :: attrs
-                    end
-                | lookUpAttr(_, attrs) = (name, E.VarEntry{access=selfAccess, ty=T.UNIT}) :: attrs
-              val attrs = foldl lookUpAttr nil attributes
-
-              val envclass' =
-                E.ClassEntry{parent=SOME(parentClassEntry), attributes=attrs}
+              val envclass'' =
+                case envclass'
+                  of SOME c => c
+                   | NONE => ErrorMsg.impossible "classdec didn't generate environment class"
             in
                ({venv=venv,
                 tenv=S.enter(tenv, name, classTy),
-                cenv=S.enter(cenv, name, envclass'),
+                cenv=S.enter(cenv, name, envclass''),
                 exps=exps @ exps'}, class)
             end
     in
