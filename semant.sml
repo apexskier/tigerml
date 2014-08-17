@@ -496,7 +496,9 @@ struct
                           of SOME(class) => class
                            | NONE =>
                             (error pos ("class '" ^ S.name name ^ "' not found");
-                            valOf(S.look(cenv, S.symbol "Object")))
+                            case S.look(cenv, S.symbol "Object")
+                              of SOME e => e
+                               | NONE => ErrorMsg.impossible ("didn't find class '" ^ S.name name ^ "' environment entry"))
 
                       fun getAttrs(class as E.ClassEntry{parent=pclass, attributes=thisAttrs}, baseAttrs) =
                         case pclass
@@ -555,6 +557,7 @@ struct
     let
       fun trdec(A.FunctionDec fundecs) =
             let
+              val _ = print "enter functiondec\n"
               fun basicFunDec({name, params, result, body, pos}, (funcs, venv, levels)) =
                 let
                   val label = Temp.newLabel()(* DEBUG: Temp.namedLabel(Symbol.name name) *)
@@ -614,22 +617,22 @@ struct
             end
         | trdec(A.VarDec{name, escape, typ, init, pos}) =
             let
+              val _ = print "enter vardec\n"
               val {exp=initExp, ty=initTy} = transExp(venv, tenv, cenv, init, level, noBreak, class)
               fun eq(a) =
                 a = S.name name
               val access = Tr.allocLocal(level)(!escape)
               val initExp' = Tr.varDec{init=initExp, level=level, access=access}
-              val ret = {venv=case class
-                                of SOME _ => venv (* Don't enter into venv, we'll transform these into self.name unless there's an override *)
-                                 | NONE => S.enter(venv, name, E.VarEntry{access=access, ty=initTy}),
-                         tenv=tenv,
-                         cenv=cenv,
-                         exps=exps @ [initExp']}
+              val enventry = E.VarEntry{access=access, ty=initTy}
+              val venv' = case class
+                            of SOME _ => venv
+                             (* Don't enter into venv, we'll transform these into self.name unless there's an override *)
+                             | NONE => S.enter(venv, name, enventry)
+              val class' = case class
+                             of SOME(Env.ClassEntry{parent, attributes}) =>
+                               SOME(Env.ClassEntry{parent=parent, attributes=(name, enventry) :: attributes})
+                              | NONE => class
             in
-              (* if this is a class variable declaration, this needs to point
-              * to a field off of self, rather than to a real locally allocated
-              * variable *)
-
               case typ
                 of SOME(tyName, tyPos) =>
                   (case S.look(tenv, tyName)
@@ -643,7 +646,7 @@ struct
                     error pos ("initializing non-record variable '" ^ S.name name ^ "' to nil: '" ^ S.name name ^ "'")
                   else
                     ();
-              (ret, class)
+              ({venv=venv', tenv=tenv, cenv=cenv, exps=exps @ [initExp']}, class')
             end
         | trdec(A.TypeDec tydecs) =
             let
@@ -678,7 +681,10 @@ struct
               val classTy =
                 T.CLASS(name, S.look(tenv, parent), ref ())
               val selfAccess = Tr.allocLocal(level)(true)
-              val objectClass = valOf(S.look(cenv, S.symbol "Object"))
+              val objectClass =
+                case S.look(cenv, S.symbol "Object")
+                  of SOME e => e
+                   | NONE => ErrorMsg.impossible ("didn't find class '" ^ S.name name ^ "' environment entry")
               val parentClassEntry =
                 case S.look(cenv, parent)
                   of SOME parent' => parent'
@@ -710,13 +716,24 @@ struct
 
               fun lookUpAttr(A.FunctionDec fundecs, attrs) =
                     let
+                      val enventry =
+                        case S.look(venv', name)
+                          of SOME e => e
+                           | NONE => ErrorMsg.impossible ("didn't find function '" ^ S.name name ^ "' environment entry")
                       fun lookUpFundec({name, params, result, body, pos}) =
-                        (name, valOf(S.look(venv', name)))
+                        (name, enventry)
                     in
                       map lookUpFundec(fundecs) @ attrs
                     end
                 | lookUpAttr(A.VarDec{name, escape, typ, init, pos}, attrs) =
-                    (name, valOf(S.look(venv', name))) :: attrs
+                    let
+                      val enventry =
+                        case S.look(venv', name)
+                          of SOME e => e
+                           | NONE => ErrorMsg.impossible ("didn't find var '" ^ S.name name ^ "' environment entry")
+                    in
+                      (name, enventry) :: attrs
+                    end
                 | lookUpAttr(_, attrs) = (name, E.VarEntry{access=selfAccess, ty=T.UNIT}) :: attrs
               val attrs = foldl lookUpAttr nil attributes
 

@@ -56,10 +56,10 @@ structure Main = struct
   fun compile filename =
     let
       val absyn = Parse.parse filename
-      val _ = print "\n## Type checking\n"
-      val _ = Semant.transProg absyn
       val _ = print "\n## Abstract Syntax Tree\n"
       val _ = PrintAbsyn.print(TextIO.stdOut, absyn)
+      val _ = print "\n## Type checking\n"
+      val _ = Semant.transProg absyn
       val frags = Tr.getResult()
     in
       withOpenFile (filename ^ ".s")
