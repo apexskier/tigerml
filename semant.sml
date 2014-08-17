@@ -128,10 +128,12 @@ struct
                             case S.look(cenv, s)
                               of SOME c => c
                                | NONE => ErrorMsg.impossible "no class found for class type"
+                      val apos = ref 0
                       fun matchAttr(E.ClassEntry{parent, attributes}) =
                         let
                           fun eq(attrname, enventry) =
-                            attrname = id
+                            (apos := !apos + 1;
+                            attrname = id)
                         in
                           case parent
                             of SOME(parent') =>
@@ -144,7 +146,7 @@ struct
                       val matchedAttr = matchAttr class'
                     in
                       case matchedAttr
-                        of SOME(E.VarEntry{access, ty}) => {exp=Tr.simpleVar(access, level), ty=actTy ty}
+                        of SOME(E.VarEntry{access, ty}) => {exp=Tr.fieldVar{var=varExp, pos=(!apos - 1)}, ty=actTy ty}
                          | SOME(E.FunEntry _) =>
                           (error pos ("accessing class method '" ^ S.name id ^ "' as class variable");
                           errExpty)
@@ -474,9 +476,9 @@ struct
                         {exp=Tr.callExp{name=label,
                                         level=level,
                                         funLevel=funlevel,
-                                        args=(List.map getExp)(List.map trexp args)}, ty=resultTy}
+                                        args=(* self *)varExp::(List.map getExp)(List.map trexp args)}, ty=resultTy}
                        | SOME(E.VarEntry _) =>
-                        (error pos ("accessing class method '" ^ S.name name ^ "' as class variable");
+                        (error pos ("accessing class variable '" ^ S.name name ^ "' as class method");
                         errExpty)
                        | NONE =>
                         (error pos ("class method '" ^ S.name name ^"' not found");
@@ -596,7 +598,7 @@ struct
                   val class'' =
                     case class'
                       of SOME(E.ClassEntry{parent, attributes}) =>
-                        SOME(E.ClassEntry{parent=parent, attributes=(name, enventry) :: attributes})
+                        SOME(E.ClassEntry{parent=parent, attributes=attributes @ [(name, enventry)]})
                        | NONE => class'
                 in
                   (funcList, funcEnv, newLevel :: levels, class'')
@@ -635,7 +637,7 @@ struct
               val class' =
                 case class
                   of SOME(E.ClassEntry{parent, attributes}) =>
-                    SOME(E.ClassEntry{parent=parent, attributes=(name, enventry) :: attributes})
+                    SOME(E.ClassEntry{parent=parent, attributes=attributes @ [(name, enventry)]})
                    | NONE => class
             in
               case typ
