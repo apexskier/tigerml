@@ -86,7 +86,8 @@ struct
     let
       fun trvar(A.SimpleVar(id, pos)) =
             (case S.look(venv, id)
-              of SOME(E.VarEntry{access, ty}) => {exp=Tr.simpleVar(access, level), ty=actTy ty}
+              of SOME(E.VarEntry{access, ty}) =>
+                {exp=Tr.simpleVar(access, level), ty=actTy ty}
                | SOME(E.FunEntry{level, label, formals, result}) =>
                  (error pos ("function name used as var: '" ^ S.name id ^ "'");
                  errExpty)
@@ -146,7 +147,8 @@ struct
                       val matchedAttr = matchAttr class'
                     in
                       case matchedAttr
-                        of SOME(E.VarEntry{access, ty}) => {exp=Tr.fieldVar{var=varExp, pos=(!apos - 1)}, ty=actTy ty}
+                        of SOME(E.VarEntry{access, ty}) =>
+                          {exp=Tr.fieldVar{var=varExp, pos=(!apos - 1)}, ty=actTy ty}
                          | SOME(E.FunEntry _) =>
                           (error pos ("accessing class method '" ^ S.name id ^ "' as class variable");
                           errExpty)
@@ -564,7 +566,11 @@ struct
                   val label = Temp.newLabel()(* DEBUG: Temp.namedLabel(Symbol.name name) *)
                   fun getEscape{name, escape, typ, pos} =
                     !escape
-                  val newLevel = Tr.newLevel{parent=level, name=label, formals=map getEscape params}
+                  val fs =
+                    case class'
+                      of SOME _ => true :: map getEscape params
+                       | NONE => map getEscape params
+                  val newLevel = Tr.newLevel{parent=level, name=label, formals=fs}
                   val resultTy =
                     case result
                       of SOME(s, _) =>
@@ -592,7 +598,11 @@ struct
                       error pos ("redeclaring function in contiguous function declarations: '" ^ S.name name ^ "'")
                     else ()
 
-                  val enventry = E.FunEntry{level=level, label=label, formals=paramsTys, result=resultTy}
+                  val fs =
+                    case class'
+                      of SOME _ => T.CLASS(S.symbol "something", NONE, ref ()) :: paramsTys (* TODO: test *)
+                       | NONE => paramsTys
+                  val enventry = E.FunEntry{level=level, label=label, formals=fs, result=resultTy}
                   val funcEnv = S.enter(venv, name, enventry)
                   val funcList = ((name, params, result, body, pos), paramlist, resultTy) :: funcs
                   val class'' =
@@ -607,7 +617,7 @@ struct
 
               fun checkFunc(((name, params, result, body, pos), formals, resultTy), newLevel) =
                 let
-                  val accesses = Tr.getAccesses newLevel
+                  val accesses = Tr.getAccesses(newLevel, isSome class)
                   fun addParam((name, ty, escape), access, venv') =
                     S.enter(venv', name, E.VarEntry{access=access, ty=ty})
                   val bodyEnv = ListPair.foldl addParam recEnv (formals, accesses)

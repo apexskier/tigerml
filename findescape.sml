@@ -7,6 +7,8 @@ struct
   structure A = Absyn
   structure S = Symbol
 
+  (* TODO: calculate escapes for class selfs *)
+
   val error = ErrorMsg.impossible
   val baseEnv = Symbol.empty
 
