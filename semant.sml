@@ -8,10 +8,10 @@ sig
   type expty = {exp:Translate.exp, ty:Types.ty}
   type envres = {venv:venv, tenv:tenv, cenv:cenv, exps:Translate.exp list}
 
-  val transVar : venv * tenv * cenv * Absyn.var * Translate.level * bool -> expty
-  val transExp : venv * tenv * cenv * Absyn.exp * Translate.level * Temp.label * bool-> expty
-  val transDec : venv * tenv * cenv * Absyn.dec * Translate.exp list * Translate.level * bool -> envres
-  val transDecs : venv * tenv * cenv * Absyn.dec list * Translate.level * bool -> envres
+  val transVar : venv * tenv * cenv * Absyn.var * Translate.level * Env.classentry option -> expty
+  val transExp : venv * tenv * cenv * Absyn.exp * Translate.level * Temp.label * Env.classentry option -> expty
+  val transDec : venv * tenv * cenv * Absyn.dec * Translate.exp list * Translate.level * Env.classentry option -> envres
+  val transDecs : venv * tenv * cenv * Absyn.dec list * Translate.level * Env.classentry option -> envres
   val transTy : tenv * Absyn.ty -> Types.ty
 end
 
@@ -85,7 +85,7 @@ struct
        | T.CLASS _ => "class"
 
   (* Main visible functions *)
-  fun transVar(venv, tenv, cenv, var, level, class) =
+  fun transVar(venv, tenv, cenv, var, level, class:Env.classentry option) =
     let
       fun trvar(A.SimpleVar(id, pos)) =
             (case S.look(venv, id)
@@ -94,12 +94,12 @@ struct
                  (error pos ("function name used as var: '" ^ S.name id ^ "'");
                  errExpty)
                | NONE =>
-                if class then
-                  (* use a reference to the class instance *)
-                  trvar(A.FieldVar(A.SimpleVar(S.symbol "self", pos), id, pos))
-                else
-                  (error pos ("unknown variable '" ^ S.name id ^ "'");
-                  errExpty))
+                (case class
+                  of SOME _ =>
+                    transVar(venv, tenv, cenv, A.FieldVar(A.SimpleVar(S.symbol "self", pos), id, pos), level, class)
+                   | NONE =>
+                    (error pos ("unknown variable '" ^ S.name id ^ "'");
+                    errExpty)))
         | trvar(A.FieldVar(var, id, pos)) =
             let
               val {exp=varExp, ty=varTy} = trvar var
@@ -124,7 +124,13 @@ struct
                     (* find a matching class attribute *)
                     (* verify attribute is a variable *)
                     let
-                      val class as E.ClassEntry{parent, attributes} = valOf(S.look(cenv, s))
+                      val class' as E.ClassEntry{parent, attributes} =
+                        case class
+                          of SOME c => c
+                           | NONE =>
+                            case S.look(cenv, s)
+                              of SOME c => c
+                               | NONE => ErrorMsg.impossible "no class found for class type"
                       fun matchAttr(E.ClassEntry{parent, attributes}) =
                         let
                           fun eq(attrname, enventry) =
@@ -139,7 +145,7 @@ struct
                               (error pos ("class attribute '" ^ S.name id ^ "' not found");
                               NONE)
                         end
-                      val matchedAttr = matchAttr(class)
+                      val matchedAttr = matchAttr class'
                     in
                       case matchedAttr
                         of SOME(E.VarEntry{access, ty}) => {exp=Tr.simpleVar(access, level), ty=actTy ty}
@@ -172,7 +178,7 @@ struct
       trvar var
     end
 
-  and transExp(venv, tenv, cenv, exp, level, brkAlw, class) =
+  and transExp(venv, tenv, cenv, exp, level, brkAlw, class:Env.classentry option) =
     let
       fun trexp(A.VarExp var) =
             transVar(venv, tenv, cenv, var, level, class)
@@ -410,7 +416,7 @@ struct
               errExpty)
         | trexp(A.LetExp{decs, body, pos}) =
             let
-              val {venv=venv', tenv=tenv', cenv=cenv', exps=exps'} = transDecs(venv, tenv, cenv, decs, level, false)
+              val {venv=venv', tenv=tenv', cenv=cenv', exps=exps'} = transDecs(venv, tenv, cenv, decs, level, NONE)
               val {exp=bodyexp, ty=ty} = transExp(venv', tenv', cenv', body, level, brkAlw, class)
             in
               {exp=Tr.letExp(exps', bodyexp), ty=ty}
@@ -615,9 +621,9 @@ struct
                 a = S.name name
               val access = Tr.allocLocal(level)(!escape)
               val initExp' = Tr.varDec{init=initExp, level=level, access=access}
-              val ret = {venv=if class then venv (* Don't enter into venv, we'll transform these into self.name unless there's an override *)
-                              else
-                                S.enter(venv, name, E.VarEntry{access=access, ty=initTy}),
+              val ret = {venv=case class
+                                of SOME _ => venv (* Don't enter into venv, we'll transform these into self.name unless there's an override *)
+                                 | NONE => S.enter(venv, name, E.VarEntry{access=access, ty=initTy}),
                          tenv=tenv,
                          cenv=cenv,
                          exps=exps @ [initExp']}
@@ -700,10 +706,9 @@ struct
 
               val envclass =
                 E.ClassEntry{parent=SOME(parentClassEntry), attributes=nil}
-              val classCenv = S.enter(cenv, name, envclass)
 
               val {venv=venv', tenv=tenv', cenv=cenv', exps=exps'} =
-                transDecs(classVenv, classTenv, classCenv, attributes, level, true)
+                transDecs(classVenv, classTenv, cenv, attributes, level, SOME(envclass))
 
               fun lookUpAttr(A.FunctionDec fundecs, attrs) =
                     let
@@ -765,7 +770,7 @@ struct
       val startLevel = Tr.newLevel{parent=Tr.outermost, name=Temp.namedLabel("tigermain"), formals=[]}
     in
       Tr.procEntryExit(startLevel,
-                       getExp(transExp(E.base_venv, E.base_tenv, E.base_cenv, exp, startLevel, noBreak, false)),
+                       getExp(transExp(E.base_venv, E.base_tenv, E.base_cenv, exp, startLevel, noBreak, NONE)),
                        true)
     end
 
