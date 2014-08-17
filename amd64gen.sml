@@ -200,8 +200,8 @@ struct
         | munchStm(T.MOVE(T.MEM(T.CONST i), e)) =
             ErrorMsg.impossible "tiger doesn't support direct memory access"
         | munchStm(T.MOVE(T.MEM e1, e2)) =
-            emit(A.OPER{assem="movq \t`s0, (`d0)\n",
-                        src=[munchExp e2], dst=[munchExp e1], jump=NONE})
+            emit(A.OPER{assem="movq \t`s0, (`s1)\n",
+                        src=[munchExp e2, munchExp e1], dst=[], jump=NONE}) (* TODO: This is weird *)
         | munchStm(T.MOVE(T.CONST j, T.MEM e)) =
             ErrorMsg.impossible "moving memory into constant"
         | munchStm(T.MOVE(T.NAME n, T.MEM e)) =

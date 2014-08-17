@@ -137,7 +137,7 @@ struct
                         in
                           case parent
                             of SOME(parent') =>
-                              (case List.find eq attributes
+                              (case List.find eq (rev attributes) (* TODO: test with class inheritance *)
                                 of m as SOME(symbol, entry) => SOME(entry)
                                  | NONE => matchAttr parent')
                              | NONE =>
@@ -598,7 +598,7 @@ struct
                   val class'' =
                     case class'
                       of SOME(E.ClassEntry{parent, attributes}) =>
-                        SOME(E.ClassEntry{parent=parent, attributes=attributes @ [(name, enventry)]})
+                        SOME(E.ClassEntry{parent=parent, attributes=(name, enventry) :: attributes})
                        | NONE => class'
                 in
                   (funcList, funcEnv, newLevel :: levels, class'')
@@ -637,7 +637,7 @@ struct
               val class' =
                 case class
                   of SOME(E.ClassEntry{parent, attributes}) =>
-                    SOME(E.ClassEntry{parent=parent, attributes=attributes @ [(name, enventry)]})
+                    SOME(E.ClassEntry{parent=parent, attributes=(name, enventry) :: attributes})
                    | NONE => class
             in
               case typ
