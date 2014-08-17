@@ -6,18 +6,16 @@ sig
   type tenv = Types.ty Symbol.table
   type cenv = Env.classentry Symbol.table
   type expty = {exp:Translate.exp, ty:Types.ty}
-  type envres = {venv:venv, tenv:tenv, cenv:cenv, exps:Translate.exp list}
 
   val transVar : venv * tenv * cenv * Absyn.var * Translate.level * Env.classentry option -> expty
   val transExp : venv * tenv * cenv * Absyn.exp * Translate.level * Temp.label * Env.classentry option -> expty
-  val transDec : venv * tenv * cenv * Absyn.dec * Translate.exp list * Translate.level * Env.classentry option -> envres
-  val transDecs : venv * tenv * cenv * Absyn.dec list * Translate.level * Env.classentry option -> envres
+  val transDec : venv * tenv * cenv * Absyn.dec * Translate.exp list * Translate.level * Env.classentry option -> {venv:venv, tenv:tenv, cenv:cenv, exps:Translate.exp list} * Env.classentry option
+  val transDecs : venv * tenv * cenv * Absyn.dec list * Translate.level * Env.classentry option -> {venv:venv, tenv:tenv, cenv:cenv, exps:Translate.exp list}
   val transTy : tenv * Absyn.ty -> Types.ty
 end
 
 structure Semant : SEMANT =
 struct
-
   structure A = Absyn
   structure E = Env
   structure T = Types
@@ -36,7 +34,6 @@ struct
   type tenv = T.ty S.table
   type cenv = E.classentry S.table
   type expty = {exp: Tr.exp, ty: T.ty}
-  type envres = {venv:venv, tenv:tenv, cenv:cenv, exps:Tr.exp list}
 
   (* Utility functions *)
   fun actTy(T.NAME(name, ty)) =
@@ -547,10 +544,11 @@ struct
 
   and transDecs(venv, tenv, cenv, decs, level, class) =
     let
-      fun trdecs(dec, {venv=venv', tenv=tenv', cenv=cenv', exps=exps'}) =
-        transDec(venv', tenv', cenv', dec, exps', level, class)
+      fun trdecs(dec, ({venv=venv', tenv=tenv', cenv=cenv', exps=exps'}, class')) =
+        transDec(venv', tenv', cenv', dec, exps', level, class')
+      val (return, class') = foldl trdecs ({venv=venv, tenv=tenv, cenv=cenv, exps=nil}, class) decs
     in
-      foldl trdecs {venv=venv, tenv=tenv, cenv=cenv, exps=nil} decs
+      return
     end
 
   and transDec(venv, tenv, cenv, dec, exps, level, class) =
@@ -612,7 +610,7 @@ struct
                 end
               val _ = ListPair.appEq checkFunc (funcList, levels)
             in
-              {venv=recEnv, tenv=tenv, cenv=cenv, exps=exps}
+              ({venv=recEnv, tenv=tenv, cenv=cenv, exps=exps}, class)
             end
         | trdec(A.VarDec{name, escape, typ, init, pos}) =
             let
@@ -645,7 +643,7 @@ struct
                     error pos ("initializing non-record variable '" ^ S.name name ^ "' to nil: '" ^ S.name name ^ "'")
                   else
                     ();
-              ret
+              (ret, class)
             end
         | trdec(A.TypeDec tydecs) =
             let
@@ -670,7 +668,7 @@ struct
                    exps=exps}
                 end
             in
-              foldl trtydec {venv=venv, tenv=tenv, cenv=cenv, exps=exps} tydecs
+              (foldl trtydec {venv=venv, tenv=tenv, cenv=cenv, exps=exps} tydecs, class)
             end
         | trdec(A.ClassDec{name, parent, attributes, pos}) =
             (* 1. get all attributes(symbol * attribute) and make sure types in attributes exist, typechecking var decs fully
@@ -725,10 +723,10 @@ struct
               val envclass' =
                 E.ClassEntry{parent=SOME(parentClassEntry), attributes=attrs}
             in
-               {venv=venv,
+               ({venv=venv,
                 tenv=S.enter(tenv, name, classTy),
                 cenv=S.enter(cenv, name, envclass'),
-                exps=exps @ exps'}
+                exps=exps @ exps'}, class)
             end
     in
       trdec dec
@@ -773,5 +771,4 @@ struct
                        getExp(transExp(E.base_venv, E.base_tenv, E.base_cenv, exp, startLevel, noBreak, NONE)),
                        true)
     end
-
 end
