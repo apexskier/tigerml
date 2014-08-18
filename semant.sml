@@ -137,9 +137,9 @@ struct
                             attrname = id)
                         in
                           case parent
-                            of SOME(parent') =>
+                            of SOME parent' =>
                               (case List.find eq (rev attributes) (* TODO: test with class inheritance *)
-                                of m as SOME(symbol, entry) => SOME(entry)
+                                of m as SOME(symbol, entry) => SOME entry
                                  | NONE => matchAttr parent')
                              | NONE =>
                               NONE
