@@ -9,4 +9,4 @@ run:
 	gcc -g runtime.c test.tig.s
 
 clean:
-	rm -f tiger.lex.* tiger.grm.* tigerml.* *.$(ARCH)
+	rm -f tiger.lex.* tiger.grm.* tigerml.* *.s *.$(ARCH)
