@@ -699,7 +699,7 @@ struct
                 let
                   val newtemp = T.newTemp()
                   val _ = E.debug ("rewriteprogram made new temp " ^ T.makeString newtemp ^ " for def\n")
-                  val tree = Tree.MOVE(Tree.TEMP newtemp, F.exp(access)(Tree.TEMP F.FP))
+                  val tree = Tree.MOVE(Tree.TEMP newtemp, F.getAccess(access)(Tree.TEMP F.FP))
                   val instrs = Amd64Codegen.codegen frame tree
                 in
                   insertInstr(instrs, var, false);
@@ -709,7 +709,7 @@ struct
                 let
                   val newtemp = T.newTemp()
                   val _ = E.debug ("rewriteprogram made new temp " ^ T.makeString newtemp ^ " for use\n")
-                  val tree = Tree.MOVE(F.exp(access)(Tree.TEMP F.FP), Tree.TEMP newtemp)
+                  val tree = Tree.MOVE(F.getAccess(access)(Tree.TEMP F.FP), Tree.TEMP newtemp)
                   val instrs = Amd64Codegen.codegen frame tree
                 in
                   insertInstr(instrs, var, true);

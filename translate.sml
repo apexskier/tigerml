@@ -390,7 +390,7 @@ struct
     in
       case acclev
         of Level({frame=frame, parent=parentLevel}, _) =>
-          Ex(F.exp(fracc)(staticLink(acclev, level)))
+          Ex(F.getAccess(fracc)(staticLink(acclev, level)))
          | Outer =>
           error "illegal: variable access at outermost level"
     end

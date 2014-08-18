@@ -17,7 +17,7 @@ sig
   val registers : string list
   val registerTemps : Temp.temp list
   val wordsize : int
-  val exp : access -> Tree.exp -> Tree.exp
+  val getAccess : access -> Tree.exp -> Tree.exp
 
   val externalCall : string * Tree.exp list -> Tree.exp
   val string : Temp.label * string -> string
