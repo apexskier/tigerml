@@ -94,7 +94,7 @@ struct
         raise Fail "Allocating locals at outermost level"
        | Level({frame=frame as {name, formals, accesses, locals, entree}, parent}, _) =>
         (* Remove the static link and self (if it's a class) *)
-        map (fn a => (level, a)) (if class then tl(tl accesses) else tl accesses)
+        map (fn a => (level, a)) (tl accesses)
 
   (* Utilities *)
   val emptyEx = Ex(T.CONST 0)
@@ -352,7 +352,7 @@ struct
     recordExp attrs
 
   and newMethod{name, level, funLevel} =
-    Ex(T.NAME name) (* TODO *)
+    Ex(T.NAME name)
 
   and recordExp fields =
     let

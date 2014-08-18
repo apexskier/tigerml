@@ -566,10 +566,17 @@ struct
                   val label = Temp.newLabel()(* DEBUG: Temp.namedLabel(Symbol.name name) *)
                   fun getEscape{name, escape, typ, pos} =
                     !escape
+                  val params' =
+                    case class' (* TODO: get escape of self *)
+                      of SOME _ =>
+                        let
+                          val ty = S.symbol "classname"
+                        in
+                          {name=S.symbol "self", escape=ref true, typ=S.symbol "Object", pos=pos} :: params
+                        end
+                       | NONE => params
                   val fs =
-                    case class'
-                      of SOME _ => true :: map getEscape params
-                       | NONE => map getEscape params
+                    map getEscape params'
                   val newLevel = Tr.newLevel{parent=level, name=label, formals=fs}
                   val resultTy =
                     case result
@@ -587,7 +594,7 @@ struct
                        | NONE =>
                         (error pos ("unknown type for paramenter '" ^ S.name name ^ "': '" ^ S.name typ ^ "'");
                         params)
-                  val paramsEnv = foldr checkParams nil params
+                  val paramsEnv = foldr checkParams nil params'
                   val (paramsTys, paramlist) = ListPair.unzip paramsEnv
 
                   fun testFun({name=name', params, result, body, pos}) =
@@ -604,7 +611,7 @@ struct
                        | NONE => paramsTys
                   val enventry = E.FunEntry{level=level, label=label, formals=fs, result=resultTy}
                   val funcEnv = S.enter(venv, name, enventry)
-                  val funcList = ((name, params, result, body, pos), paramlist, resultTy) :: funcs
+                  val funcList = ((name, params', result, body, pos), paramlist, resultTy) :: funcs
                   val class'' =
                     case class'
                       of SOME(E.ClassEntry{parent, attributes}) =>
@@ -615,7 +622,7 @@ struct
                 end
               val (funcList, recEnv, levels, class') = foldr basicFunDec (nil, venv, nil, class) fundecs
 
-              fun checkFunc(((name, params, result, body, pos), formals, resultTy), newLevel) =
+              fun checkFunc(((name, params', result, body, pos), formals, resultTy), newLevel) =
                 let
                   val accesses = Tr.getAccesses(newLevel, isSome class)
                   fun addParam((name, ty, escape), access, venv') =
@@ -697,7 +704,6 @@ struct
             let
               val classTy =
                 T.CLASS(name, S.look(tenv, parent), ref ())
-              val selfAccess = Tr.allocLocal(level)(true)
               val objectClass =
                 case S.look(cenv, S.symbol "Object")
                   of SOME e => e
@@ -723,7 +729,7 @@ struct
               val parentVenv = getParentEnv(parentClassEntry, venv)
 
               val classTenv = S.enter(tenv, name, classTy)
-              val classVenv = S.enter(parentVenv, S.symbol "self", E.VarEntry{access=selfAccess, ty=classTy})
+              val classVenv = parentVenv
 
               val envclass =
                 E.ClassEntry{parent=SOME(parentClassEntry), attributes=nil}
