@@ -46,6 +46,14 @@ struct
 
   fun getExp({exp, ty}) = exp
 
+  fun idx(item, ls) =
+    let
+      fun idx'(m, nil) = 0
+        | idx'(m, h::t) = if h = item then m else idx'(m+1, t)
+    in
+      idx'(0, ls)
+    end
+
   fun tyEq(a, b) =
     let val A = actTy a
         val B = actTy b
@@ -129,26 +137,44 @@ struct
                             case S.look(cenv, s)
                               of SOME c => c
                                | NONE => ErrorMsg.impossible "no class found for class type"
-                      val apos = ref 0
+                      fun eq(attrname, enventry) =
+                        attrname = id
                       fun matchAttr(E.ClassEntry{parent, attributes}) =
-                        let
-                          fun eq(attrname, enventry) =
-                            (apos := !apos + 1;
-                            attrname = id)
-                        in
-                          case parent
-                            of SOME parent' =>
-                              (case List.find eq (rev attributes) (* TODO: test with class inheritance *)
-                                of m as SOME(symbol, entry) => SOME entry
-                                 | NONE => matchAttr parent')
-                             | NONE =>
-                              NONE
-                        end
+                        case parent
+                          of SOME parent' =>
+                            (case List.find eq (rev attributes) (* TODO: test with class inheritance *)
+                              of m as SOME(symbol, entry) => SOME entry
+                               | NONE => matchAttr parent')
+                           | NONE =>
+                            NONE
                       val matchedAttr = matchAttr class'
                     in
                       case matchedAttr
                         of SOME(E.VarEntry{access, ty}) =>
-                          {exp=Tr.fieldVar{var=varExp, pos=(!apos - 1)}, ty=actTy ty}
+                          let
+                            fun getAttrs(class as E.ClassEntry{parent=pclass, attributes=thisAttrs}, baseAttrs) =
+                              case pclass
+                                of NONE => baseAttrs
+                                 | SOME(pclass') =>
+                                  let
+                                    fun insertAttr(attr as (attrname:S.symbol, enventry:E.enventry), attrs) =
+                                      let
+                                        fun eq name =
+                                          attrname = name
+                                      in
+                                        if List.exists eq attrs then
+                                          attrs
+                                        else
+                                          attrname :: attrs
+                                      end
+                                  in
+                                    getAttrs(pclass', foldl insertAttr baseAttrs thisAttrs)
+                                  end
+                            val allattrs = getAttrs(class', nil)
+                            val pos = idx(id, allattrs)
+                          in
+                            {exp=Tr.fieldVar{var=varExp, pos=pos}, ty=actTy ty}
+                          end
                          | SOME(E.FunEntry _) =>
                           (error pos ("accessing class method '" ^ S.name id ^ "' as class variable");
                           errExpty)
