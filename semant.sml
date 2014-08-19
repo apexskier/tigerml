@@ -54,6 +54,17 @@ struct
       idx'(0, ls)
     end
 
+  fun strType ty =
+    case ty
+      of T.RECORD _ => "record"
+       | T.NIL => "nil"
+       | T.INT => "int"
+       | T.STRING => "string"
+       | T.ARRAY(ty', _) => ("array of " ^ strType ty')
+       | T.NAME _ => "name"
+       | T.UNIT => "unit"
+       | T.CLASS(s, _, _) => ("class '" ^ S.name s ^ "'")
+
   fun refType(ty) =
     case ty
       of T.RECORD _ => true
@@ -66,9 +77,11 @@ struct
        | T.CLASS _ => true
 
   fun tyEq(a, b) =
-    let val A = actTy a
-        val B = actTy b
+    let
+      val A = actTy a
+      val B = actTy b
     in
+      (* print ("-----> " ^ strType A ^ " ?= " ^ strType B ^ "\n"); *)
       if A = B then true
       else
         case A
@@ -80,6 +93,10 @@ struct
             (case B
               of T.RECORD(_, u') => u = u'
                | T.NIL => true
+               | _ => false)
+           | T.ARRAY(_, u) =>
+            (case A
+              of T.ARRAY(_, u') => u = u'
                | _ => false)
            | T.CLASS(_, parent, u) =>
             (case parent
@@ -204,9 +221,11 @@ struct
             in
               if tyEq(expTy, T.INT) then
                 case varTy
-                  of T.ARRAY(ty, _) => {exp=Tr.subscriptVar{var=varExp, loc=expExp}, ty=ty}
-                   | _ => (error pos "subscripting non-array";
-                      errExpty)
+                  of T.ARRAY(ty, _) =>
+                    {exp=Tr.subscriptVar{var=varExp, loc=expExp}, ty=ty}
+                   | _ =>
+                    (error pos "subscripting non-array";
+                    errExpty)
               else
                 (error pos ("subscripting with non integer");
                 errExpty)
@@ -469,7 +488,7 @@ struct
               case S.look(tenv, typ)
                 of SOME(T.ARRAY(ty, unique)) =>
                   if tyEq(initTy, ty) then
-                    {exp=Tr.arrayExp{size=sizeExp, init=initExp, pointer=refType initTy}, ty=T.ARRAY(ty, unique)}
+                    {exp=Tr.arrayExp{size=sizeExp, init=initExp, pointer=refType initTy}, ty=T.ARRAY(initTy, unique)}
                   else
                     (error pos ("init type doesn't match array type: '" ^ S.name typ ^ "'");
                     errExpty)
@@ -723,7 +742,6 @@ struct
                     if length numExists > 1 then
                       error pos ("redeclaring type in contiguous type declarations: '" ^ S.name name ^ "'")
                     else ()
-
                   val newTy = transTy(initEnv, ty)
                 in
                   {venv=venv,
@@ -778,7 +796,7 @@ struct
     let
       fun trty(A.NameTy(name, pos)) =
             (case S.look(tenv, name)
-              of SOME(ty) => ty
+              of SOME ty => ty
                | NONE =>
                 (error pos ("unknown type '" ^ S.name name ^ "'");
                 T.UNIT))
@@ -786,7 +804,7 @@ struct
             let
               fun convertField({name, escape, typ, pos}, fields) =
                 case S.look(tenv, typ)
-                  of SOME(ty) => (name, ty) :: fields
+                  of SOME ty => (name, ty) :: fields
                    | NONE =>
                     (error pos ("unknown type in record field: '" ^ S.name typ ^ "'");
                     fields)
@@ -795,7 +813,7 @@ struct
             end
         | trty(A.ArrayTy(name, pos)) =
             (case S.look(tenv, name)
-              of SOME(ty) =>
+              of SOME ty =>
                 T.ARRAY(ty, ref ())
                | NONE =>
                 (error pos ("unknown array type: '" ^ S.name name ^ "'");
