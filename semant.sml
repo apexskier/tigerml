@@ -651,8 +651,8 @@ struct
               fun checkFunc(((name, params', result, body, pos), formals, resultTy), newLevel) =
                 let
                   val accesses = Tr.getAccesses(newLevel, isSome class)
-                  fun addParam((name, ty, escape), access, venv') =
-                    S.enter(venv', name, E.VarEntry{access=access, ty=ty})
+                  fun addParam((name', ty, escape), access, venv') =
+                    S.enter(venv', name', E.VarEntry{access=access, ty=ty})
                   val bodyEnv = ListPair.foldl addParam recEnv (formals, accesses)
                   val {exp=bodyExp, ty=bodyTy} = transExp(bodyEnv, tenv, cenv, body, newLevel, noBreak, class)
                 in
@@ -741,27 +741,13 @@ struct
                     (error pos ("parent class '" ^ S.name parent ^ "' not found");
                     objectClass)
 
-              fun getParentEnv(pclass as E.ClassEntry{parent=pclass', attributes=pattrs}, venv:venv) =
-                case pclass'
-                  of NONE => venv
-                   | SOME(pclass') =>
-                    let
-                      val venv' = getParentEnv(pclass', venv)
-                      fun insertAttr((attrname:S.symbol, enventry:E.enventry), venv) =
-                        S.enter(venv, attrname, enventry)
-                    in
-                      foldl insertAttr venv' pattrs
-                    end
-              val parentVenv = getParentEnv(parentClassEntry, venv)
-
               val classTenv = S.enter(tenv, name, classTy)
-              val classVenv = parentVenv
 
               val envclass =
                 E.ClassEntry{parent=SOME(parentClassEntry), attributes=nil}
 
               val ({venv=venv', tenv=tenv', cenv=cenv', exps=exps'}, envclass') =
-                transDecs(classVenv, classTenv, cenv, attributes, level, SOME(envclass))
+                transDecs(venv, classTenv, cenv, attributes, level, SOME(envclass))
 
               val envclass'' =
                 case envclass'
