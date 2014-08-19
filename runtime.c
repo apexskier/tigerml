@@ -1,4 +1,4 @@
-//#define DEBUG
+#define DEBUG
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -6,17 +6,22 @@
  * Internal Runtime
  * */
 
-int *initArray(int size, int init) {
+int *initArray(int size, int init, int pointers) {
     int i;
     long *a = (long *)malloc(size * sizeof(long));
     for (i = 0; i < size; i++) a[i] = init;
 #ifdef DEBUG
-    printf("initialized array: size %d, init %d\n", size, init);
+    printf("initialized array: size %d, ref: ", size);
+    if (init == 0) {
+        printf("false\n");
+    } else {
+        printf("true\n");
+    }
 #endif
     return (int *)a;
 }
 
-int *allocRecord(int size) {
+int *allocRecord(int size/*, int *pointers*/) {
     int i;
     int *p, *a;
     p = a = (int *)malloc(size);

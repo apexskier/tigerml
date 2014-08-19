@@ -54,6 +54,17 @@ struct
       idx'(0, ls)
     end
 
+  fun refType(ty) =
+    case ty
+      of T.RECORD _ => true
+       | T.NIL => false
+       | T.INT => false
+       | T.STRING => false
+       | T.ARRAY _ => true
+       | T.NAME _ => false
+       | T.UNIT => false
+       | T.CLASS _ => true
+
   fun tyEq(a, b) =
     let val A = actTy a
         val B = actTy b
@@ -458,7 +469,7 @@ struct
               case S.look(tenv, typ)
                 of SOME(T.ARRAY(ty, unique)) =>
                   if tyEq(initTy, ty) then
-                    {exp=Tr.arrayExp{size=sizeExp, init=initExp}, ty=T.ARRAY(initTy, unique)}
+                    {exp=Tr.arrayExp{size=sizeExp, init=initExp, pointer=refType initTy}, ty=T.ARRAY(ty, unique)}
                   else
                     (error pos ("init type doesn't match array type: '" ^ S.name typ ^ "'");
                     errExpty)
@@ -686,7 +697,7 @@ struct
               case typ
                 of SOME(tyName, tyPos) =>
                   (case S.look(tenv, tyName)
-                    of SOME(ty) =>
+                    of SOME ty =>
                       if tyEq(initTy, ty) then ()
                       else error pos ("variable '" ^ S.name name ^ "' type '" ^ S.name tyName ^ "' doesn't match initialization")
                      | NONE =>

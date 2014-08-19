@@ -20,7 +20,7 @@ sig
   val unCx : exp -> (Temp.label * Temp.label -> Tree.stm)
 
   val arithExp : {oper:Absyn.oper, left:exp, right:exp} -> exp
-  val arrayExp : {size:exp, init:exp} -> exp
+  val arrayExp : {size:exp, init:exp, pointer:bool} -> exp
   val assignExp : exp * exp -> exp
   val breakExp : Temp.label -> exp
   val callExp : {name:Temp.label, level:level, funLevel:level, args:exp list} -> exp
@@ -180,8 +180,8 @@ struct
       Ex(T.BINOP(oper', unEx left, unEx right))
     end
 
-  and arrayExp{size, init} =
-    Ex(F.externalCall("initArray", [unEx size, unEx init]))
+  and arrayExp{size, init, pointer} =
+    Ex(F.externalCall("initArray", [unEx size, unEx init, T.CONST(if pointer then 1 else 0)]))
 
   and assignExp(var, exp) =
     Nx(T.MOVE(unEx var, unEx exp))
