@@ -93,7 +93,10 @@ struct
             (trexp size;
             trexp init)
         | trexp(A.MethodExp{var, name, args, pos}) =
-            app trexp args
+            (if length args > (!count) then
+              count := (length args)
+             else ();
+            app trexp args)
         | trexp(A.NewExp(name, pos)) =
             ()
     in
