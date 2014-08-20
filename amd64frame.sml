@@ -58,9 +58,13 @@ struct
     | seq [e] = e
     | seq (e :: es) = (T.SEQ (e, (seq es)))
 
-  fun newFrame{name, formals} =
+  fun newFrame{name, formals, argspace} =
     let
       val n = length formals (* TODO: deal with arguments overflowing the registers *)
+      val l = length argRegs
+      val tolong = l > length formals
+      val regargs = if tolong then formals else List.take(formals, l)
+      val frameargs = if tolong then [] else List.drop(formals, l)
       fun itr(nil, _) = nil
         | itr(arg::rest, offset) =
             if arg then
@@ -68,11 +72,29 @@ struct
             else
               InReg(Temp.newTemp()) :: itr(rest, offset)
       val accesses = itr(formals, 0) (* generate instructions to save all the arguments *)
-      fun instr(access, reg) =
+      val regAccesses = if tolong then accesses else List.take(accesses, l)
+      val fraAccesses = if tolong then [] else List.drop(accesses, l)
+      fun regInstr(access, reg) =
         T.MOVE(getAccess(access)(T.TEMP FP), T.TEMP reg)
-      val instrs = ListPair.map instr (accesses, argRegs)
+      val offset = ref 0
+      val argsspace = ref 1
+      fun fraInstr(access) =
+        (offset := !offset + 1;
+        T.MOVE(T.TEMP(hd argRegs),
+               T.MEM(T.BINOP(T.PLUS,
+                             getAccess(access)(T.TEMP FP),
+                             T.CONST((!offset) * wordsize)))))
+      val regInstrs = ListPair.map regInstr (regAccesses, argRegs)
+      val fraInstrs = if tolong then [] else map fraInstr fraAccesses
+      val instrs = regInstrs @ fraInstrs
+      val prelocs =
+        if argspace > (l - 1) then
+          argspace - (l - 1)
+        else
+          0
     in
-      {name=name, formals=formals, accesses=accesses, locals=ref 0, entree=seq instrs}
+      print("locs = "^Int.toString(prelocs)^"\n");
+      {name=name, formals=formals, accesses=accesses, locals=ref prelocs, entree=seq instrs}
     end
 
   and name(f:frame) = #name f

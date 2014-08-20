@@ -633,7 +633,7 @@ struct
                        | NONE => params
                   val fs =
                     map getEscape params'
-                  val newLevel = Tr.newLevel{parent=level, name=label, formals=fs}
+                  val newLevel = Tr.newLevel{parent=level, name=label, formals=fs, maxargs=(!levelargs)}
                   val resultTy =
                     case result
                       of SOME(s, _) =>
@@ -826,7 +826,7 @@ struct
     let
       val startExtraArgs = ExtraArgs.calcArgs(exp)
       val _ = FindEscape.findEscape(exp)
-      val startLevel = Tr.newLevel{parent=Tr.outermost, name=Temp.namedLabel("tigermain"), formals=[]}
+      val startLevel = Tr.newLevel{parent=Tr.outermost, name=Temp.namedLabel("tigermain"), formals=[], maxargs=startExtraArgs}
     in
       Tr.procEntryExit(startLevel,
                        getExp(transExp(E.base_venv, E.base_tenv, E.base_cenv, exp, startLevel, noBreak, NONE)),

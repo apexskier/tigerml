@@ -10,7 +10,7 @@ sig
   val fragments : Frame.frag list ref
   val emptyEx : exp
 
-  val newLevel : {parent:level, name:Temp.label, formals:bool list} -> level
+  val newLevel : {parent:level, name:Temp.label, formals:bool list, maxargs:int} -> level
   val formals : level -> Frame.access list
   val allocLocal : level -> bool -> access
   val getAccesses : level * bool -> access list
@@ -70,9 +70,9 @@ struct
   val noBreak = Temp.newLabel()
   val breakLabel = ref noBreak
 
-  fun newLevel{parent, name, formals} =
+  fun newLevel{parent, name, formals, maxargs} =
     (* create a new frame, inserting an extra parameter for the static link *)
-    Level({frame=F.newFrame({name=name, formals=true :: formals}), parent=parent}, ref ())
+    Level({frame=F.newFrame({name=name, formals=true :: formals, argspace=maxargs}), parent=parent}, ref ())
 
   fun formals level =
     case level
