@@ -11,6 +11,7 @@ color.sig
 color.sml
 env.sml
 errormsg.sml
+extraargs.sml
 findescape.sml
 flowgraph.sml
 frame.sig

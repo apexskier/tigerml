@@ -617,7 +617,7 @@ struct
     let
       fun trdec(A.FunctionDec fundecs) =
             let
-              fun basicFunDec({name, params, result, body, pos}, (funcs, venv, levels, class')) =
+              fun basicFunDec({name, params, levelargs, result, body, pos}, (funcs, venv, levels, class')) =
                 let
                   val label = Temp.newLabel()(* DEBUG: Temp.namedLabel(Symbol.name name) *)
                   fun getEscape{name, escape, typ, pos} =
@@ -653,7 +653,7 @@ struct
                   val paramsEnv = foldr checkParams nil params'
                   val (paramsTys, paramlist) = ListPair.unzip paramsEnv
 
-                  fun testFun({name=name', params, result, body, pos}) =
+                  fun testFun({name=name', params, result, levelargs, body, pos}) =
                     name = name'
                   val numExists = List.filter testFun fundecs
                   val _ =

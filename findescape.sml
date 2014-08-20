@@ -109,7 +109,7 @@ struct
     let
       fun trdec(A.FunctionDec fundecs) =
             let
-              fun trFun({name, params, result, body, pos}, env) =
+              fun trFun({name, params, levelargs, result, body, pos}, env) =
                 let
                   fun trparam({name, escape, typ, pos}, env) =
                     (escape := false;

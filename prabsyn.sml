@@ -94,7 +94,7 @@ struct
               (indent d; say "("; say(Symbol.name name);
                say ","; say(Bool.toString(!escape));
                say ","; say(Symbol.name typ); say ")")
-          fun f({name,params,result,body,pos},d) =
+          fun f({name,params,levelargs,result,body,pos},d) =
              (indent d; say "("; say (Symbol.name name); say ",[";
               dolist d field params; sayln "],";
               case result of NONE => say "NONE"

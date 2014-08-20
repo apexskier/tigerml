@@ -50,6 +50,7 @@ struct
                     typ: symbol, pos: pos}
   and   fundec = {name: symbol,
                   params: field list,
+                  levelargs: int ref,
                   result: (symbol * pos) option,
                   body: exp,
                   pos: pos}
