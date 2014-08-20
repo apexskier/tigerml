@@ -277,9 +277,14 @@ struct
                 else
                   F.FP
             in
-              emit(A.MOVE{assem="movq \t`s0, `d0 \t# arg " ^ Int.toString argnum ^ "\n",
-                          src=munchExp arg, dst=arg'});
-              arg' :: munchArgs(argnum + 1, args)
+              if argnum < length F.argRegs then
+                (emit(A.MOVE{assem="movq \t`s0, `d0 \t# arg " ^ Int.toString argnum ^ "\n",
+                            src=munchExp arg, dst=arg'});
+                arg' :: munchArgs(argnum + 1, args))
+              else
+                (emit(A.OPER{assem="movq \t`s0, " ^ intStr((argnum - numRegs + 1) * F.wordsize) ^ "(`d0) \t# arg " ^ Int.toString argnum ^ "\n",
+                            src=[munchExp arg], dst=[arg'], jump=NONE});
+                arg' :: munchArgs(argnum + 1, args))
             end
         | munchArgs(argnum, []) = []
 
