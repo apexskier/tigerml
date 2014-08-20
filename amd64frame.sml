@@ -1,9 +1,11 @@
 structure Amd64Frame : FRAME =
 struct
+  structure T = Tree
+
   datatype access = InFrame of int
                   | InReg of Temp.temp
-  type frame = {name:Temp.label, formals:bool list, accesses:access list, locals:int ref, entree:Tree.stm}
-  datatype frag = PROC of {body: Tree.stm, frame: frame}
+  type frame = {name:Temp.label, formals:bool list, accesses:access list, locals:int ref, entree:T.stm}
+  datatype frag = PROC of {body: T.stm, frame: frame}
                 | STRING of Temp.label * string
   type register = string
 
@@ -46,15 +48,15 @@ struct
   val colorables = calleeSaves @ callerSaves
 
   fun getAccess(InFrame k) =
-        (fn(fp) => Tree.MEM(Tree.BINOP(Tree.PLUS, fp, Tree.CONST(k * wordsize))))
+        (fn(fp) => T.MEM(T.BINOP(T.PLUS, fp, T.CONST(k * wordsize))))
     | getAccess(InReg t) =
-        (fn(Fp) => Tree.TEMP t)
+        (fn(Fp) => T.TEMP t)
 
-  (* fun move(reg, var) = Tree.MOVE(reg, var) *)
+  (* fun move(reg, var) = T.MOVE(reg, var) *)
 
-  fun seq [] = Tree.EXP (Tree.CONST 0)
+  fun seq [] = T.EXP (T.CONST 0)
     | seq [e] = e
-    | seq (e :: es) = (Tree.SEQ (e, (seq es)))
+    | seq (e :: es) = (T.SEQ (e, (seq es)))
 
   fun newFrame{name, formals} =
     let
@@ -67,7 +69,7 @@ struct
               InReg(Temp.newTemp()) :: itr(rest, offset)
       val accesses = itr(formals, 0) (* generate instructions to save all the arguments *)
       fun instr(access, reg) =
-        Tree.MOVE(getAccess(access)(Tree.TEMP FP), Tree.TEMP reg)
+        T.MOVE(getAccess(access)(T.TEMP FP), T.TEMP reg)
       val instrs = ListPair.map instr (accesses, argRegs)
     in
       {name=name, formals=formals, accesses=accesses, locals=ref 0, entree=seq instrs}
@@ -86,7 +88,7 @@ struct
       InReg(Temp.newTemp())
 
   fun externalCall(name, args) =
-    Tree.CALL(Tree.NAME(Temp.namedLabel name), args)
+    T.CALL(T.NAME(Temp.namedLabel name), args)
 
   (* Put a string in memory with a label refering to it *)
   fun string (label, str) =
@@ -104,13 +106,13 @@ struct
 
   fun procEntryExit1(frame as {name, formals=forms, accesses, locals, entree}, body) =
     let
-      (* TODO val saved = map (fn t => Tree.TEMP t) (RV :: calleeSaves)
-      val temps = map (fn t => exp (allocLocal(frame)(true)) (Tree.TEMP FP)) saved
+      (* TODO val saved = map (fn t => T.TEMP t) (RV :: calleeSaves)
+      val temps = map (fn t => exp (allocLocal(frame)(true)) (T.TEMP FP)) saved
       val saveRegisters = seq(ListPair.mapEq move (temps, saved))
       val restoreRegisters = seq(ListPair.mapEq move (saved, temps))
       val body' = seq[saveRegisters, body, restoreRegisters] *)
     in
-      Tree.SEQ(entree, body)
+      T.SEQ(entree, body)
     end
 
   fun procEntryExit2(frame, body) =
