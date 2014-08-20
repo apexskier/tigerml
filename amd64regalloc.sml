@@ -121,6 +121,7 @@ struct
         end
       val _ = E.debug ("initokColors: " ^ ListFormat.listToString (Int.toString) initokColors ^ "\n")
       val _ = E.debug ("initok: " ^ ListFormat.listToString (Int.toString) initok ^ "\n")
+      val _ = E.debug ("initok: " ^ ListFormat.listToString (fn a => List.nth(F.registers, a)) initok ^ "\n")
       val colors = ref (foldl nodeMap.insert'
                               nodeMap.empty
                               (ListPair.zip(F.registerTemps, (map (fn x=>x-1) (List.tabulate(length F.registerTemps, fn x => x+1))))))
@@ -339,7 +340,8 @@ struct
           repeat();
           assignColors();
           if not(nodeSet.isEmpty(!spilledNodes)) then
-            (rewriteProgram(); main())
+            (rewriteProgram();
+            main())
           else ();
           let
             fun transformRegTemp t =
@@ -607,6 +609,7 @@ struct
                                                          * are the tiny live ranges resulting from the fetches of previously
                                                          * spilled registers" *)
         in
+          E.debug ("selecting node to spill: " ^ format m ^ "\n");
           spillWorklist := nodeSet.delete(!spillWorklist, m);
           simplifyWorklist := nodeSet.add(!simplifyWorklist, m);
           if nodeSet.member(!precolored, m) then E.debug ("Putting precolored node "^format m^" in simplifyWorklist!\n") else ();
@@ -620,15 +623,19 @@ struct
             val n =
               let val n' = hd(!selectStack)
               in selectStack := tl(!selectStack); n' end
-            val _ = if nodeSet.member(!precolored, n) then E.debug ("Putting precolored node "^format n^" in coloredNodes!\n") else ();
+            val _ =
+              if nodeSet.member(!precolored, n) then
+                E.debug ("Putting precolored node "^format n^" in coloredNodes!\n")
+              else ()
             val i = ref 0
             val okColors = ref (intSet.addList(intSet.empty, initok))
             fun forall w =
               if nodeSet.member((nodeSet.union(!coloredNodes, !precolored)), getAlias w) then
                 let
-                  val a = valOf(nodeMap.find(!colors, getAlias w)) handle NotFound => E.impossible(format(getAlias w) ^ " has no color")
+                  val a = valOf(nodeMap.find(!colors, getAlias w))
+                    handle NotFound => E.impossible(format(getAlias w) ^ " has no color")
                 in
-                  E.debug ("deleting color " ^ Int.toString a ^ " from okColors\n");
+                  E.debug ("deleting color " ^ Int.toString a ^ " ("^ List.nth(F.registers, a) ^") from okColors\n");
                   okColors := intSet.delete(!okColors, a)
                   handle NotFound => E.debug (format a ^ " not found in assignColors\n")
                 end
@@ -637,8 +644,8 @@ struct
             E.debug ("Doing " ^ format n ^ "\n");
             nodeSet.app forall (valOf(nodeMap.find(!adjList, n)) handle NotFound => nodeSet.empty);
             if intSet.isEmpty(!okColors) then
-              (spilledNodes := nodeSet.add(!spilledNodes, n);
-              E.debug ("spilling " ^ format n ^ "\n"))
+              (E.debug ("spilling " ^ format n ^ "\n");
+              spilledNodes := nodeSet.add(!spilledNodes, n))
             else
               let
                 val c = hd(intSet.listItems(!okColors))
@@ -651,7 +658,8 @@ struct
         let
           fun addCoalescedColor n =
             let
-              val c = valOf(nodeMap.find(!colors, getAlias n)) handle NotFound => E.impossible(format(getAlias n) ^ " has no color.")
+              val c = valOf(nodeMap.find(!colors, getAlias n))
+                handle NotFound => E.impossible(format(getAlias n) ^ " has no color.")
             in
               E.debug ("assigning color " ^ Int.toString c ^ " to " ^ format n ^ " from " ^ format(getAlias n) ^ " (c)\n");
               colors := nodeMap.insert(!colors, n, c)
@@ -664,66 +672,71 @@ struct
       and rewriteProgram() =
         let
           val _ = E.debug "enter rewriteProgram\n"
-          fun foreachSpill(node:FG.node, newtemps':nodeSet.set) =
+          fun idx(item, ls) =
             let
+              fun idx'(m, nil) = 0
+                | idx'(m, h::t) = if FG.eq(h, item) then m else idx'(m+1, t)
+            in
+              idx'(0, ls)
+            end
+          (* val newInstructions = !instructions
+          val addedInstructions = ref 0 *)
+          fun foreachSpill(temp) =
+            let
+              val nodeIdx = idx(!tnode temp, !cfNodes)
+              val _ = print ("rewriting for temp '" ^ Temp.makeString temp ^ "' " ^ Int.toString nodeIdx ^ "\n")
               val access = F.allocLocal(frame)(true)
-              val defs = getDef node
-              val uses = getUse node
-              fun idx(item, ls) =
+
+              fun iterInstructions(instr, instrs) =
                 let
-                  fun idx'(m, nil) = 0
-                    | idx'(m, h::t) = if FG.eq(h, item) then m else idx'(m+1, t)
+                  fun foreach(dst, src) =
+                    let
+                      fun d instrs =
+                        if List.exists (fn t => t = temp) dst then
+                          let
+                            val _ = print "found a dst: "
+                            val _ = print (Assem.format(format) instr)
+                            val tree = Tree.MOVE(F.getAccess(access)(Tree.TEMP F.FP), Tree.TEMP temp)
+                            val _ = Printtree.printtree(TextIO.stdOut, tree)
+                            val newinstrs = Amd64Codegen.codegen frame tree
+                          in
+                            instrs @ newinstrs
+                          end
+                        else
+                          instrs
+                      fun s() =
+                        if List.exists (fn t => t = temp) src then
+                          let
+                            val _ = print "found a src: "
+                            val _ = print (Assem.format(format) instr)
+                            val tree = Tree.MOVE(Tree.TEMP temp, F.getAccess(access)(Tree.TEMP F.FP))
+                            val _ = Printtree.printtree(TextIO.stdOut, tree)
+                            val newinstrs = Amd64Codegen.codegen frame tree
+                          in
+                            instrs @ newinstrs @ [instr]
+                          end
+                        else
+                          instrs @ [instr]
+                    in
+                      d(s())
+                    end
                 in
-                  idx'(0, ls)
-                end
-              fun insertInstr(instrs, node, bfr:bool) =
-                let
-                  val nodeIdx = idx(!tnode node, !cfNodes) - (if bfr then 1 else 0)
-                  val newnodes = List.map (fn _ => FG.newNode(!control)) instrs
-                in
-                  E.debug ("test " ^ Int.toString nodeIdx ^ ", length: " ^ Int.toString(length(!cfNodes)) ^ "\n");
-                  cfNodes :=
-                    (if nodeIdx = length (!cfNodes) then
-                      !cfNodes @ newnodes
-                    else
-                      if nodeIdx < 0 then
-                        newnodes @ !cfNodes
-                      else
-                        (List.take(!cfNodes, nodeIdx)) @ newnodes @ (List.drop(!cfNodes, nodeIdx)));
-                  E.debug "inserting some instructions\n";
-                  instructions :=
-                    (if nodeIdx = length (!cfNodes) then
-                      !instructions @ instrs
-                    else
-                      if nodeIdx < 0 then
-                        instrs @ !instructions
-                      else
-                        (List.take(!instructions, nodeIdx)) @ instrs @ (List.drop(!instructions, nodeIdx)))
-                end
-              fun forEachDef(var, newtemps) =
-                let
-                  val newtemp = T.newTemp()
-                  val _ = E.debug ("rewriteprogram made new temp " ^ format newtemp ^ " for def\n")
-                  val tree = Tree.MOVE(Tree.TEMP newtemp, F.getAccess(access)(Tree.TEMP F.FP))
-                  val instrs = Amd64Codegen.codegen frame tree
-                in
-                  insertInstr(instrs, var, false);
-                  nodeSet.add(newtemps, newtemp)
-                end
-              fun forEachUse(var, newtemps) =
-                let
-                  val newtemp = T.newTemp()
-                  val _ = E.debug ("rewriteprogram made new temp " ^ format newtemp ^ " for use\n")
-                  val tree = Tree.MOVE(F.getAccess(access)(Tree.TEMP F.FP), Tree.TEMP newtemp)
-                  val instrs = Amd64Codegen.codegen frame tree
-                in
-                  insertInstr(instrs, var, true);
-                  nodeSet.add(newtemps, newtemp)
+                  case instr
+                    of Assem.OPER{assem,dst,src,jump} =>
+                      foreach(dst, src)
+                     | Assem.LABEL{assem,...} =>
+                      instrs @ [instr]
+                     | Assem.MOVE{assem,dst,src} =>
+                      foreach([dst], [src])
                 end
             in
-              nodeSet.foldl forEachDef (nodeSet.foldl forEachUse newtemps' uses) defs
+              print("instructions\n");
+              app (fn i => (TextIO.output(TextIO.stdOut, Assem.format(format) i))) (!instructions);
+              instructions := foldl iterInstructions nil (!instructions);
+              print("new instructions\n");
+              app (fn i => (TextIO.output(TextIO.stdOut, Assem.format(format) i))) (!instructions)
             end
-          val newTemps = List.foldl foreachSpill nodeSet.empty (List.map (fn t => !tnode t) (nodeSet.listItems(!spilledNodes)))
+          val newTemps = nodeSet.app foreachSpill (!spilledNodes)
         in
         (* TODO:
         * Allocate memory locations for each v in spilledNodes.
@@ -732,7 +745,7 @@ struct
         * Put all the vi into a set newTemps.
         * *)
           spilledNodes := nodeSet.empty;
-          initial := nodeSet.union(!coloredNodes, nodeSet.union(!coalescedNodes, newTemps));
+          initial := nodeSet.union(!coloredNodes, !coalescedNodes);
           coloredNodes := nodeSet.empty;
           coalescedNodes := nodeSet.empty;
           E.debug "exit rewriteProgram\n"

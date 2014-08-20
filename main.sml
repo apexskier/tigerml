@@ -18,9 +18,10 @@ structure Main = struct
           val _ = app (fn s => Printtree.printtree(TextIO.stdOut, s)) stms
 
           val instrs = List.concat(map (Amd64Codegen.codegen frame) stms)
-          val {prolog, body=instrs', epilog} = F.procEntryExit3(frame, instrs)
 
-          val (instrs'', allocation) = Amd64RegAlloc.alloc(instrs', frame)
+          val (instrs', allocation) = Amd64RegAlloc.alloc(instrs, frame)
+
+          val {prolog, body=instrs'', epilog} = F.procEntryExit3(frame, instrs')
 
           fun format(t) =
             case Temp.Table.look(F.tempMap, t)
