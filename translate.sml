@@ -213,11 +213,9 @@ struct
            | A.GeOp => T.GE
            | _ =>
                ErrorMsg.impossible "non-comparison operator"
-      val cx =
-        fn(t, f) =>
-          T.CJUMP(oper', unEx left, unEx right, t, f)
     in
-      Cx cx (* TODO: should this produce one or zero? *)
+      Cx (fn(t, f) =>
+          T.CJUMP(oper', unEx left, unEx right, t, f))
     end
 
   and compareNil() =
@@ -477,7 +475,7 @@ struct
                               frame=frame} :: !fragments
         end
     | procEntryExit(Outer, body:exp, returns:bool) =
-        print "procEntryExit entering at outer level\n"
+        ErrorMsg.impossible "procEntryExit entering at outer level\n"
 
   fun getResult() = !fragments
 end

@@ -264,13 +264,18 @@ struct
         | munchStm(T.EXP e) =
             (munchExp e; ())
 
-        (* | munchStm tree =
+        (* DEBUG: | munchStm tree =
             (print "buggy tree:\n"; Printtree.printtree(TextIO.stdOut, tree);
             ErrorMsg.impossible "unexpected statement in maximal munch algorithm") *)
 
       and munchArgs(argnum, arg::args) = (* TODO: handle more parameters than arg registers *)
             let
-              val arg' = List.nth(F.argRegs, argnum)
+              val numRegs = length F.argRegs
+              val arg' =
+                if argnum < length F.argRegs then
+                  List.nth(F.argRegs, argnum)
+                else
+                  F.FP
             in
               emit(A.MOVE{assem="movq \t`s0, `d0 \t# arg " ^ Int.toString argnum ^ "\n",
                           src=munchExp arg, dst=arg'});

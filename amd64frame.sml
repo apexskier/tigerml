@@ -75,9 +75,9 @@ struct
       {name=name, formals=formals, accesses=accesses, locals=ref 0, entree=seq instrs}
     end
 
-  fun name(f:frame) = #name f
+  and name(f:frame) = #name f
 
-  fun formals(f as {name, formals, accesses, locals, entree}) =
+  and formals(f as {name, formals, accesses, locals, entree}) =
     accesses
 
   fun allocLocal(f as {name, formals=forms, accesses, locals, entree}) escape =
