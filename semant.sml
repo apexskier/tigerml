@@ -653,7 +653,7 @@ struct
                   val paramsEnv = foldr checkParams nil params'
                   val (paramsTys, paramlist) = ListPair.unzip paramsEnv
 
-                  fun testFun({name=name', params, result, levelargs, body, pos}) =
+                  fun testFun({name=name', params, levelargs, result, body, pos}) =
                     name = name'
                   val numExists = List.filter testFun fundecs
                   val _ =
@@ -824,6 +824,7 @@ struct
 
   fun transProg(exp) =
     let
+      val startExtraArgs = ExtraArgs.calcArgs(exp)
       val _ = FindEscape.findEscape(exp)
       val startLevel = Tr.newLevel{parent=Tr.outermost, name=Temp.namedLabel("tigermain"), formals=[]}
     in
