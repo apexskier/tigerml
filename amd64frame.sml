@@ -144,7 +144,7 @@ struct
 
   fun procEntryExit3(frame as {name, formals, locals, accesses, entree}, body) =
     let
-      val size = ((length formals) + (!locals)) * wordsize
+      val size = ((length (List.filter (fn f => f) formals)) + (!locals)) * wordsize
       val space = (size mod 16) + size
     in
       {prolog="\t.text\n" ^
