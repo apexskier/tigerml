@@ -1,0 +1,18 @@
+let
+    function readline():string =
+        /* strips leading spaces */
+        let
+            var ret:string := ""
+            var buffer := getchar()
+        in
+            (while buffer = " " do
+                buffer := getchar();
+            while buffer <> "\n" do
+                (ret := concat(ret, buffer);
+                buffer := getchar());
+            ret)
+        end
+in
+    print("What is your name: ");
+    print(concat(concat("hello, ", readline()), "\n"))
+end
