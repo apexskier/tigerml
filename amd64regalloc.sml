@@ -691,32 +691,52 @@ struct
                 let
                   fun foreach(dst, src) =
                     let
-                      fun d instrs =
+                      fun d(instrs, instr') =
                         if List.exists (fn t => t = temp) dst then
                           let
+                            val newtemp = Temp.newTemp()
+                            val newdst = List.map (fn t => if t = temp then newtemp else t) dst
+                            val newinstr =
+                              case instr'
+                                of Assem.OPER{assem,dst,src,jump} =>
+                                    Assem.OPER{assem=assem, dst=newdst, src=src, jump=jump}
+                                 | Assem.LABEL{assem,...} =>
+                                    instr'
+                                 | Assem.MOVE{assem,dst,src} =>
+                                    Assem.MOVE{assem=assem, dst=newtemp, src=src}
                             val _ = print "found a dst: "
                             val _ = print (Assem.format(format) instr)
-                            val tree = Tree.MOVE(F.getAccess(access)(Tree.TEMP F.FP), Tree.TEMP temp)
+                            val tree = Tree.MOVE(F.getAccess(access)(Tree.TEMP F.FP), Tree.TEMP newtemp)
                             val _ = Printtree.printtree(TextIO.stdOut, tree)
                             val newinstrs = Amd64Codegen.codegen frame tree
                           in
-                            instrs @ newinstrs
+                            instrs @ [newinstr] @ newinstrs
                           end
                         else
-                          instrs
+                          instrs @ [instr']
                       fun s() =
                         if List.exists (fn t => t = temp) src then
                           let
+                            val newtemp = Temp.newTemp()
+                            val newsrc = List.map (fn t => if t = temp then newtemp else t) src
+                            val newinstr =
+                              case instr
+                                of Assem.OPER{assem,dst,src,jump} =>
+                                    Assem.OPER{assem=assem, dst=dst, src=newsrc, jump=jump}
+                                 | Assem.LABEL{assem,...} =>
+                                    instr
+                                 | Assem.MOVE{assem,dst,src} =>
+                                    Assem.MOVE{assem=assem, dst=dst, src=newtemp}
                             val _ = print "found a src: "
                             val _ = print (Assem.format(format) instr)
-                            val tree = Tree.MOVE(Tree.TEMP temp, F.getAccess(access)(Tree.TEMP F.FP))
+                            val tree = Tree.MOVE(Tree.TEMP newtemp, F.getAccess(access)(Tree.TEMP F.FP))
                             val _ = Printtree.printtree(TextIO.stdOut, tree)
                             val newinstrs = Amd64Codegen.codegen frame tree
                           in
-                            instrs @ newinstrs @ [instr]
+                            (instrs @ newinstrs, newinstr)
                           end
                         else
-                          instrs @ [instr]
+                          (instrs, instr)
                     in
                       d(s())
                     end
