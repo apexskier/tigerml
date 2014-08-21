@@ -44,6 +44,14 @@ int stringEqual(struct string *s, struct string *t) {
     for (i = 0; i < s->length; i++) if (s->chars[i] != t->chars[i]) return 0;
     return 1;
 }
+int strNeq(struct string *s, struct string *t) {
+  int i = stringEqual(s, t);
+  if (i == 0) {
+    return 1;
+  } else {
+    return 0;
+  }
+}
 
 /* *
  * Standard Library

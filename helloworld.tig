@@ -1,0 +1,29 @@
+let
+    function readline():string =
+        /* strips leading spaces */
+        let
+            var ret:string := ""
+            var buffer := getchar()
+        in
+            (while buffer = " " do
+                buffer := getchar();
+            while buffer <> "\n" do
+                (ret := concat(ret, buffer);
+                buffer := getchar());
+            ret)
+        end
+
+    class Person extends Object {
+        var name:string := "anonymous"
+        method init() =
+            (print("What is your name: ");
+            name := readline())
+    }
+
+    var you := new Person
+in
+    you.init();
+    print("hello, ");
+    print(you.name);
+    print("\n")
+end
