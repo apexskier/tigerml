@@ -157,7 +157,13 @@ struct
     | levEq(Outer, Outer) = true
     | levEq(_, _) = false
 
-  fun staticLink(defLevel, curLevel as Level({frame:F.frame, parent:level}, _)) =
+  fun staticLink(defLevel as Level({frame=dl, parent=dp}, _), curLevel as Level({frame=cl, parent=cp}, _)) =
+        (if levEq(dp, curLevel) then T.MEM(T.TEMP F.FP)
+        else if levEq(defLevel, curLevel) then
+          T.TEMP F.FP
+        else
+          T.MEM(staticLink(defLevel, cp)))
+    | staticLink(defLevel, curLevel as Level({frame:F.frame, parent:level}, _)) =
         if levEq(defLevel, curLevel) then
           T.TEMP F.FP
         else
