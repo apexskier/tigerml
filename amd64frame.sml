@@ -80,9 +80,9 @@ struct
       val argsspace = ref 1
       fun fraInstr(access) =
         (offset := !offset + 1;
-        T.MOVE(T.TEMP(hd argRegs),
+        T.MOVE(getAccess(access)(T.TEMP FP),
                T.MEM(T.BINOP(T.PLUS,
-                             getAccess(access)(T.TEMP FP),
+                             T.TEMP(hd argRegs),
                              T.CONST((!offset) * wordsize)))))
       val regInstrs = ListPair.map regInstr (regAccesses, argRegs)
       val fraInstrs = if tolong then [] else map fraInstr fraAccesses
