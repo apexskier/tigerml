@@ -1,0 +1,4 @@
+#!/bin/sh
+
+for last; do true; done
+sml @SMLload tigerml.* ${@} && gcc -g runtime.c ${last}.s

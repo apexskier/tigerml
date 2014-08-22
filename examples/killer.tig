@@ -1,0 +1,57 @@
+let
+	var x := 1
+
+       function printint(i: int) =
+           let function f(i:int) = if i>0 
+             then (f(i/10); print(chr(i-i/10*10+ord("0"))))
+       in if i<0 then (print("-"); f(-i))
+             else if i>0 then f(i)
+             else print("0")
+       end
+
+	function Bigsub() =
+		let
+			var a := 2
+			var b := 3
+			var c := 4
+			function sub1() =
+				let
+					var a := 5
+					var d := 6
+				in
+					(a := b + c;
+					printint(a);
+					print("\n"))
+				end
+			function sub2(x : int) =
+				let
+					var b := 7
+					var e := 8
+					function sub3() = 
+						let
+							var c := 9
+							var e := 10
+						in
+							(sub1(); 
+							e:= b + a;
+							printint(e);
+							print("\n"))
+						end
+				in
+					(printint(x);
+					print("\n");
+					sub3();
+					a := c + e;
+					printint(a);
+					print("\n"))
+				end
+		in
+			sub2(11)
+		end
+/* body of main program */
+/* if your code prints 11 7 9 12 1 you have it! */
+in
+	(Bigsub();
+	printint(x);
+	print("\n"))
+end

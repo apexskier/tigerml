@@ -1,0 +1,14 @@
+let
+    function test() =
+        let
+            function f() =
+                (print("f\n");
+                f())
+        in
+            print("test\n");
+            f()
+        end
+in
+    test()
+end
+

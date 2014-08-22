@@ -241,7 +241,8 @@ struct
                   end
               in
                 app printOuts (IG.nodes(graph'))
-              end)
+              end;
+              print "\n")
             else ()
 
           val allTemps = nodeSet.addList(nodeSet.empty, map gtemp' (IG.nodes graph'))

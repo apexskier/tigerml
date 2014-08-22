@@ -1,0 +1,20 @@
+/* an array type and an array variable */
+let
+    var one := 100
+    function test(a:int, b:int, c:int, d:int, e:int, f:int, g:int):int =
+        let
+            var newlocal := one
+        in
+            a + b + g + newlocal
+        end
+    function test2(a:int, b:int, c:int, d:int, e:int, f:int, g:int, h:int, i:int) =
+        (printint(one); print("\na = ");
+        printint(a); print("\nb = ");
+        printint(b); print("\ni = ");
+        printint(i); print("\n"))
+    var two := 200
+in
+    printint(test(1, 2, 3, 4, 5, 6, 7)); print("\n");
+    printint(one); print("\n");
+    test2(1, 2, 3, 4, 5, 6, 7, 8, 9)
+end
