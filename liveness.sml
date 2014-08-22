@@ -62,7 +62,6 @@ struct
         end
 
       val fgNodes = G.nodes control
-      val _ = app (fn n => print (FG.nodename n ^ ": " ^ assem n ^ "")) fgNodes
 
       val graphMoves = nil:(G.node * G.node) list
       val iGraph = G.newGraph()
@@ -71,7 +70,6 @@ struct
         * the control flow graph. Save them in some lookup tables. *)
       fun genINodes(h::t:FG.node list, (nodesMap, tempsMap, cf2igMap)) =
             let
-              val _ = print ("generating " ^ FG.nodename h ^ "\n")
               fun processVarsFrom(table, (nodesMap', tempsMap', cf2igMap')) =
                 case FGT.look(table, h)
                   of SOME vars =>
@@ -81,7 +79,6 @@ struct
                           of SOME node => (nodesMap'', tempsMap'', cf2igMap'')
                            | NONE =>
                             let
-                              val _ = print ("           " ^ FG.nodename h ^ " -> " ^ T.makeString var ^ "\n")
                               val node = G.newNode iGraph
                             in
                               (TT.enter(nodesMap'', var, node),
@@ -131,82 +128,6 @@ struct
           of SOME temp => temp
            | NONE => ErrorMsg.impossible ("node '" ^ G.nodename n ^ "' not found")
 
-      (* val initInLives = map (fn _ => tempSet.empty) fgNodes
-      val initOutLives = map (fn _ => tempSet.empty) fgNodes
-
-      fun repeat(inLives:tempSet.set list, outLives:tempSet.set list):(tempSet.set list * tempSet.set list) =
-        let
-          fun each(node, (inLive:tempSet.set, outLive:tempSet.set)) =
-            let
-              fun unionIn(node':G.node, outs:tempSet.set) =
-                let
-                  val i = ref 0
-                  fun tr nodes =
-                    if FG.eq(node', hd nodes) then
-                      !i
-                    else
-                      (i := !i + 1;
-                      tr(tl nodes))
-                  val n = tr fgNodes
-                in
-                  tempSet.union(outs, List.nth(inLives, n))
-                end
-            in
-              (tempSet.union(lookSet(use, node),
-                             tempSet.difference(outLive,
-                                                lookSet(def, node))),
-              foldl unionIn outLive (G.succ node))
-            end
-
-          val nodesLives = ListPair.zip(fgNodes, ListPair.zip(inLives, outLives))
-
-          val inouts = map each nodesLives
-          val (inLives', outLives') = ListPair.unzip inouts
-
-          (* DEBUG: *)
-          fun printstuff(n, (inl, outl)) =
-            (print ("fg node '"^FG.nodename n^"' ins = " ^ (ListFormat.listToString format (tempSet.listItems inl)) ^ "\n");
-            print ("fg node '"^FG.nodename n^"' outs = " ^ (ListFormat.listToString format (tempSet.listItems outl)) ^ "\n"))
-
-          (* val _ = print "originals\n"
-          val _ = app printstuff (ListPair.zip(fgNodes, ListPair.zip(inLives, outLives)))
-          val _ = print "newones\n"
-          val _ = app printstuff (ListPair.zip(fgNodes, ListPair.zip(inLives', outLives'))) *)
-
-          fun listcomp(i1:tempSet.set, i2:tempSet.set):bool =
-            let
-              val i1' = tempSet.listItems i1
-              val i2' = tempSet.listItems i2
-            in
-              if length i1' <> length i2' then false
-              else
-                List.all (fn (a, b) => a = b) (ListPair.zip(i1', i2'))
-            end
-          fun listlistcomp(l1:tempSet.set list, l2:tempSet.set list):bool =
-            List.all (fn (i1, i2) => listcomp(i1, i2)) (ListPair.zip(l1, l2))
-          val stop = (listlistcomp(inLives, inLives') andalso listlistcomp(outLives, outLives'))
-        in
-          if stop then
-            (inLives', outLives')
-          else
-            repeat(inLives', outLives')
-        end
-
-      val (inLives, outLives) = repeat(initInLives, initOutLives)
-
-      fun buildLiveMaps((node, (inLives, outLives)), (inLiveMaps, outLiveMaps)) =
-        (FGT.enter(inLiveMaps, node, inLives), FGT.enter(outLiveMaps, node, outLives))
-
-      val (inLiveMaps, outLiveMaps) = foldl buildLiveMaps (FGT.empty, FGT.empty)
-                                                          (ListPair.zip(fgNodes,
-                                                                 ListPair.zip(inLives,
-                                                                              outLives))) *)
-
-      (* fun getOutLives n =
-        tempSet.listItems(case FGT.look(outLiveMap, n)
-                            of SOME l => l
-                             | NONE => ErrorMsg.impossible ("node '" ^ FG.nodename n ^ "' liveOut not found")) *)
-
       val initOutLiveMap:tempSet.set FGT.table = foldl (fn (n, tbl) => FGT.enter(tbl, n, tempSet.empty)) FGT.empty fgNodes
       val initInLiveMap:tempSet.set FGT.table = foldl (fn (n, tbl) => FGT.enter(tbl, n, tempSet.empty)) FGT.empty fgNodes
 
@@ -241,20 +162,6 @@ struct
               (FGT.enter(outLiveMap', n, outTemps), FGT.enter(inLiveMap', n, inTemps))
             end
           val (newOutLiveMap, newInLiveMap) = foldl foreach (inLiveMap, outLiveMap) fgNodes
-          (* fun doprint(node) =
-            let
-              val nodeOuts = tempSet.listItems(valOfFG(newOutLiveMap, node))
-              val nodeIns = tempSet.listItems(valOfFG(newInLiveMap, node))
-              val os = ListFormat.listToString (T.makeString) nodeOuts
-              val is = ListFormat.listToString (T.makeString) nodeIns
-              val su = ListFormat.listToString (FG.nodename) (FG.succ node)
-              val pr = ListFormat.listToString (FG.nodename) (FG.pred node)
-              val us = ListFormat.listToString (T.makeString) (valOfFG(use, node))
-              val de = ListFormat.listToString (T.makeString) (valOfFG(def, node))
-            in
-              print (FG.nodename node ^ "-> " ^ assem(node) ^ "  out: " ^ os ^ "\n  ins: " ^ is ^ "\n  succ: " ^ su ^ "\n  pred: " ^ pr ^ "\n  use: " ^ us ^ "\n  def: " ^ de ^ "\n")
-            end
-          val _ = app doprint fgNodes *)
         in
           if equal(newOutLiveMap, outLiveMap) andalso equal(newInLiveMap, inLiveMap) then
             (newOutLiveMap, newInLiveMap)
@@ -273,51 +180,12 @@ struct
           val us = ListFormat.listToString (T.makeString) (valOfFG(use, node))
           val de = ListFormat.listToString (T.makeString) (valOfFG(def, node))
         in
-          print (FG.nodename node ^ "-> " ^ assem(node) ^ "  out: " ^ os ^ "\n  ins: " ^ is ^ "\n  succ: " ^ su ^ "\n  pred: " ^ pr ^ "\n  use: " ^ us ^ "\n  def: " ^ de ^ "\n")
+          ErrorMsg.debug (FG.nodename node ^ "-> " ^ assem(node) ^ "  out: " ^ os ^ "\n  ins: " ^ is ^ "\n  succ: " ^ su ^ "\n  pred: " ^ pr ^ "\n  use: " ^ us ^ "\n  def: " ^ de ^ "\n")
         end
       val _ = app doprint fgNodes
 
       fun getOutLives(node:FG.node):Temp.temp list =
         tempSet.listItems(valOfFG(outLiveMap, node))
-
-      (* Use a dynamic programming approach here to save what's already been calculated *)
-      (* fun calcIn(node:G.node):tempSet.set =
-        let
-          val (g, t) = node
-        in
-          print ("in calcIn for node '"^G.nodename node^"'\n");
-          case FGT.look(inLiveMap, node)
-            of SOME temps => temps
-             | NONE =>
-              let
-                val temps = tempSet.addList(tempSet.difference(calcOut node,
-                                                               lookSet(def, node)),
-                                            valOf(use, t))
-
-              in
-                FGT.enter(inLiveMap, node, temps);
-                temps
-              end
-        end
-      and calcOut(node:G.node):tempSet.set =
-        let
-          fun unionIn(node':G.node, outs:tempSet.set) =
-            tempSet.union(outs, calcIn node')
-        in
-          print ("in calcOut for node '"^G.nodename node^"'\n");
-          case FGT.look(outLiveMap, node)
-            of SOME temps => temps
-             | NONE =>
-              let
-                val temps = foldl unionIn tempSet.empty (G.succ node)
-              in
-                FGT.enter(outLiveMap, node, temps);
-                temps
-              end
-        end
-
-      fun getOutLives(node:G.node):T.temp list =
-        tempSet.listItems(calcOut node) *)
 
       fun genIGraph(h::t:FG.node list, moves) =
             let
@@ -405,7 +273,7 @@ struct
       val nodeList = G.nodes graph
       val nodeStrings = (fn n => (format (gtemp n)))
       fun nodeStr n =
-        nodeStrings n ^ " --> " ^ (String.concatWith ", " (map nodeStrings (G.adj n)))
+        nodeStrings n ^ " --> " ^ (ListFormat.listToString nodeStrings (G.adj n))
     in
       TextIO.output(out, String.concatWith "\n" (map nodeStr nodeList) ^ "\n")
     end

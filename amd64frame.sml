@@ -93,7 +93,6 @@ struct
         else
           0
     in
-      print("locs = "^Int.toString(prelocs)^"\n");
       {name=name, formals=formals, accesses=accesses, locals=ref prelocs, entree=seq instrs}
     end
 

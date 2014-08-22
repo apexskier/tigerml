@@ -13,9 +13,9 @@ struct
       val nodeList = Graph.nodes control
       val nodeStrings = (fn n => (Graph.nodename n))
       fun nodeStr(n) =
-        nodeStrings n ^ " --> " ^ (String.concatWith ", " (map nodeStrings (Graph.adj(n))))
+        nodeStrings n ^ " --> " ^ (ListFormat.listToString Graph.nodename (Graph.adj(n))) ^ "\n\t\t\t" ^ assem n
     in
-      TextIO.output(out, String.concatWith "\n" (map nodeStr nodeList) ^ "\n")
+      TextIO.output(out, String.concatWith "" (map nodeStr (rev nodeList)) ^ "\n")
     end
 
   (* Note:  any "use" within the block is assumed to be BEFORE a "def"

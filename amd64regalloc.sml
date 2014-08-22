@@ -68,12 +68,7 @@ struct
       val compare = moveCompare
     end)
 
-  fun printList(set, name) =
-    E.debug (name ^ ": " ^ ListFormat.listToString Temp.makeString (set) ^ "\n")
-  fun printSet(set, name) =
-    printList(nodeSet.listItems set, name)
-
-  fun alloc(instrs, frame) =
+  fun alloc(instrs, frame, prcfgraph, prigraph, prliveout) =
     let
       val k:int = length F.colorables
 
@@ -212,33 +207,42 @@ struct
 
       fun livenessAnalysis() =
         let
-          val _ = E.debug "\n## Control flow graph\n"
           val (cfGraph', cfNodes') = MakeGraph.instrs2graph(!instructions)
 
           val Flow.FGRAPH{control=control', def=def', use=use', assem=assem', ismove=ismove'} = cfGraph'
-          val _ = Flow.show(TextIO.stdOut, cfGraph')
+          val _ =
+            if prcfgraph then
+              (print "Control Flow Graph\n";
+              Flow.show(TextIO.stdOut, cfGraph'))
+            else ()
 
-          val _ = E.debug "\n## Interference graph\n"
           val (igraph', getOuts') = Liveness.interferenceGraph(cfGraph')
           val Liveness.IGRAPH{graph=graph', tnode=tnode', gtemp=gtemp', moves=moves'} = igraph'
-          val _ = Liveness.show(TextIO.stdOut, igraph')
-
-          val _ = E.debug "\n### Live outs\n"
           val _ =
-            let
-              fun conv t =
-                case TT.look(Amd64Frame.tempMap, t)
-                  of SOME s => "%" ^ s
-                   | NONE => format t
-              fun printOuts t =
-                let
-                  val outs = getOuts'(t)
-                in
-                  E.debug (conv (gtemp' t) ^ ": " ^ (ListFormat.listToString conv outs) ^ "\n")
-                end
-            in
-              app printOuts (IG.nodes(graph'))
-            end
+            if prigraph then
+              (print "Interference graph\n";
+              Liveness.show(TextIO.stdOut, igraph');
+              print "\n")
+            else ()
+
+          val _ =
+            if prliveout then
+              (print "Live outs:\n";
+              let
+                fun conv t =
+                  case TT.look(Amd64Frame.tempMap, t)
+                    of SOME s => "%" ^ s
+                     | NONE => format t
+                fun printOuts t =
+                  let
+                    val outs = getOuts'(t)
+                  in
+                    print (conv (gtemp' t) ^ ": " ^ (ListFormat.listToString conv outs) ^ "\n")
+                  end
+              in
+                app printOuts (IG.nodes(graph'))
+              end)
+            else ()
 
           val allTemps = nodeSet.addList(nodeSet.empty, map gtemp' (IG.nodes graph'))
           val initial' = nodeSet.difference(allTemps, !precolored);
@@ -289,8 +293,6 @@ struct
 
           E.debug "done with liveness analysis\n"
         end
-
-      val _ = livenessAnalysis()
 
       (* Utilitites *)
       fun isMove i =
@@ -454,15 +456,7 @@ struct
           if d = k then
             (enableMoves(nodeSet.add(adjacent m, m));
             spillWorklist := nodeSet.delete(!spillWorklist, m) handle NotFound => (
-              E.debug ("looking for node " ^ format m ^ "\n");
-              printSet(!precolored, "precolored");
-              printSet(!initial, "initial");
-              printSet(!simplifyWorklist, "simplifyWorklist");
-              printSet(!freezeWorklist, "freezeWorklist");
-              printSet(!spillWorklist, "spillWorklist");
-              printSet(!spilledNodes, "spilledNodes");
-              printSet(!coalescedNodes, "coalescedNodes");
-              printSet(!coloredNodes, "coloredNodes")
+              E.debug ("looking for node " ^ format m ^ "\n")
               (* E.impossible "testing" *));
             if moveRelated m then
               freezeWorklist := nodeSet.add(!freezeWorklist, m)
@@ -521,7 +515,7 @@ struct
         (E.debug "enter addWorkList\n";
         if not(nodeSet.member(!precolored, u)) andalso not(moveRelated u) andalso valOf(nodeMap.find(!degree, u)) < k then
           (freezeWorklist := nodeSet.delete(!freezeWorklist, u)
-            handle NotFound => print ("format " ^ format u ^ " not found in spillWorklist\n");
+            handle NotFound => E.impossible ("format " ^ format u ^ " not found in spillWorklist\n");
           simplifyWorklist := nodeSet.add(!simplifyWorklist, u))
         else ();
         E.debug "exit addWorkList\n")
@@ -552,7 +546,7 @@ struct
           freezeWorklist := nodeSet.delete(!freezeWorklist, v)
         else
           spillWorklist := nodeSet.delete(!spillWorklist, v)
-          handle NotFound => print (format v ^ " not found in spillWorklist\n");
+          handle NotFound => E.impossible (format v ^ " not found in spillWorklist\n");
         E.debug ("adding "^format v^" to coalescedNodes\n");
         coalescedNodes := nodeSet.add(!coalescedNodes, v);
         alias := nodeMap.insert(!alias, v, u);
@@ -684,7 +678,7 @@ struct
           fun foreachSpill(temp) =
             let
               val nodeIdx = idx(!tnode temp, !cfNodes)
-              val _ = print ("rewriting for temp '" ^ Temp.makeString temp ^ "' " ^ Int.toString nodeIdx ^ "\n")
+              val _ = E.debug ("rewriting for temp '" ^ Temp.makeString temp ^ "' " ^ Int.toString nodeIdx ^ "\n")
               val access = F.allocLocal(frame)(true)
 
               fun iterInstructions(instr, instrs) =
@@ -704,10 +698,7 @@ struct
                                     instr'
                                  | Assem.MOVE{assem,dst,src} =>
                                     Assem.MOVE{assem=assem, dst=newtemp, src=src}
-                            val _ = print "found a dst: "
-                            val _ = print (Assem.format(format) instr)
                             val tree = Tree.MOVE(F.getAccess(access)(Tree.TEMP F.FP), Tree.TEMP newtemp)
-                            val _ = Printtree.printtree(TextIO.stdOut, tree)
                             val newinstrs = Amd64Codegen.codegen frame tree
                           in
                             instrs @ [newinstr] @ newinstrs
@@ -727,10 +718,7 @@ struct
                                     instr
                                  | Assem.MOVE{assem,dst,src} =>
                                     Assem.MOVE{assem=assem, dst=dst, src=newtemp}
-                            val _ = print "found a src: "
-                            val _ = print (Assem.format(format) instr)
                             val tree = Tree.MOVE(Tree.TEMP newtemp, F.getAccess(access)(Tree.TEMP F.FP))
-                            val _ = Printtree.printtree(TextIO.stdOut, tree)
                             val newinstrs = Amd64Codegen.codegen frame tree
                           in
                             (instrs @ newinstrs, newinstr)
@@ -750,11 +738,7 @@ struct
                       foreach([dst], [src])
                 end
             in
-              print("instructions\n");
-              app (fn i => (TextIO.output(TextIO.stdOut, Assem.format(format) i))) (!instructions);
-              instructions := foldl iterInstructions nil (!instructions);
-              print("new instructions\n");
-              app (fn i => (TextIO.output(TextIO.stdOut, Assem.format(format) i))) (!instructions)
+              instructions := foldl iterInstructions nil (!instructions)
             end
           val newTemps = nodeSet.app foreachSpill (!spilledNodes)
         in
@@ -772,14 +756,6 @@ struct
         end
     in
       main();
-      printSet(!precolored, "precolored");
-      printSet(!initial, "initial");
-      printSet(!simplifyWorklist, "simplifyWorklist");
-      printSet(!freezeWorklist, "freezeWorklist");
-      printSet(!spillWorklist, "spillWorklist");
-      printSet(!spilledNodes, "spilledNodes");
-      printSet(!coalescedNodes, "coalescedNodes");
-      printSet(!coloredNodes, "coloredNodes");
       (!instructions, !allocation')
     end
 end
