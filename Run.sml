@@ -3,7 +3,7 @@ struct
   fun main(prog_name, args) =
     (* Run this program with the name of a tiger file as an argument *)
     let
-      val flags = ["--tree", "-t", "--canontree", "-ct", "--absyn", "-a", "--strings", "-s", "--cfgraph", "c", "--igraph", "-i", "--liveouts", "-l", "--help", "-h"]
+      val flags = ["--tree", "-t", "--canontree", "-ct", "--absyn", "-a", "--strings", "-s", "--cfgraph", "cfg", "--igraph", "-ig", "--liveouts", "-l", "--help", "-h"]
       val absyn = List.exists (fn a => a = "--absyn" orelse a = "-a") args
       val tree = List.exists (fn a => a = "--tree" orelse a = "-t") args
       val canontree = List.exists (fn a => a = "--canontree" orelse a = "-ct") args
