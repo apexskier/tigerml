@@ -37,3 +37,13 @@ as if variables had been declared and expressions result in their proper types
 ## References/tidbits
 
 http://flint.cs.yale.edu/cs421/case-for-ml.html
+
+## Usage
+
+```
+make run
+```
+
+```
+./tigerml --help
+```
