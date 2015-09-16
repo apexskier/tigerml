@@ -1,7 +1,7 @@
 tigerml
 =======
 
-Tiger compiler in ML.
+Tiger compiler written in [SML/NJ](http://www.smlnj.org).
 
 ## Language Specifications
 
@@ -37,6 +37,10 @@ as if variables had been declared and expressions result in their proper types
 ## References/tidbits
 
 http://flint.cs.yale.edu/cs421/case-for-ml.html
+
+## Development
+
+TODO
 
 ## Usage
 
